@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { Disruption, Passenger, Option, Wish } from "../types";
 
 interface Props {
@@ -64,6 +64,7 @@ export function FlightOverview({
   onResolve,
 }: Props) {
   const [expandedPax, setExpandedPax] = useState<Set<string>>(new Set());
+  const [search, setSearch] = useState("");
 
   const toggle = (id: string) => {
     setExpandedPax((prev) => {
@@ -74,28 +75,45 @@ export function FlightOverview({
     });
   };
 
+  // Sort: connection_at_risk first, then disrupted, then resolved, then on_track; within group by name
+  const sorted = useMemo(() => {
+    const q = search.toLowerCase().trim();
+    const filtered = q
+      ? passengers.filter(
+          (p) =>
+            p.name.toLowerCase().includes(q) ||
+            p.bookingRef.toLowerCase().includes(q) ||
+            p.originalItinerary.segments.some(
+              (s) =>
+                s.origin.toLowerCase().includes(q) ||
+                s.destination.toLowerCase().includes(q) ||
+                s.flightNumber.toLowerCase().includes(q)
+            )
+        )
+      : passengers;
+
+    return [...filtered].sort((a, b) => {
+      const order: Record<ImpactLevel, number> = {
+        connection_at_risk: 0,
+        disrupted: 1,
+        resolved: 2,
+        on_track: 3,
+      };
+      const diff =
+        order[getImpactLevel(a, disruption.flightNumber)] -
+        order[getImpactLevel(b, disruption.flightNumber)];
+      if (diff !== 0) return diff;
+      return a.name.localeCompare(b.name);
+    });
+  }, [passengers, search, disruption.flightNumber]);
+
   const expandAll = () => {
-    setExpandedPax(new Set(passengers.map((p) => p.id)));
+    setExpandedPax(new Set(sorted.map((p) => p.id)));
   };
 
   const collapseAll = () => {
     setExpandedPax(new Set());
   };
-
-  // Sort: connection_at_risk first, then disrupted, then resolved, then on_track; within group by name
-  const sorted = [...passengers].sort((a, b) => {
-    const order: Record<ImpactLevel, number> = {
-      connection_at_risk: 0,
-      disrupted: 1,
-      resolved: 2,
-      on_track: 3,
-    };
-    const diff =
-      order[getImpactLevel(a, disruption.flightNumber)] -
-      order[getImpactLevel(b, disruption.flightNumber)];
-    if (diff !== 0) return diff;
-    return a.name.localeCompare(b.name);
-  });
 
   const atRisk = passengers.filter(
     (p) => getImpactLevel(p, disruption.flightNumber) === "connection_at_risk"
@@ -159,10 +177,37 @@ export function FlightOverview({
           <ImpactPill color="green" count={resolved} label="Resolved" />
           <ImpactPill color="slate" count={onTrack} label="On track" />
         </div>
+
+        {/* Search */}
+        <div className="relative mt-3">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted text-xs pointer-events-none">
+            /
+          </span>
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by name, PNR, airport, or flight..."
+            className="w-full bg-surface-900/60 border border-surface-600 rounded-md pl-7 pr-3 py-2 text-sm text-text-primary placeholder:text-text-muted/50 font-mono focus:outline-none focus:border-accent-blue/50 focus:ring-1 focus:ring-accent-blue/20 transition-colors"
+          />
+          {search && (
+            <button
+              onClick={() => setSearch("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-secondary text-xs font-mono cursor-pointer"
+            >
+              clear
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Passenger list */}
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-1.5">
+        {sorted.length === 0 && search && (
+          <div className="text-sm text-text-muted text-center py-8 font-mono">
+            No passengers matching "{search}"
+          </div>
+        )}
         {sorted.map((pax) => {
           const impact = getImpactLevel(pax, disruption.flightNumber);
           const options = optionsByPassenger.get(pax.id) ?? [];
@@ -449,6 +494,27 @@ function PassengerRow({
                         : "bg-surface-800/50 opacity-50"
                     } ${isChosen ? "ring-1 ring-accent-purple/40" : ""}`}
                   >
+                    {canResolve ? (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setResolvingId(opt.id);
+                          onResolve(passenger.id, opt.id).finally(() =>
+                            setResolvingId(null)
+                          );
+                        }}
+                        disabled={resolvingId !== null}
+                        className={`shrink-0 px-3 py-1.5 text-xs font-mono font-semibold rounded transition-colors cursor-pointer ${
+                          resolvingId === opt.id
+                            ? "bg-accent-green/30 text-accent-green"
+                            : "bg-accent-green/15 text-accent-green hover:bg-accent-green/25"
+                        } disabled:opacity-50 disabled:cursor-not-allowed`}
+                      >
+                        {resolvingId === opt.id ? "..." : "Resolve"}
+                      </button>
+                    ) : (
+                      <span className="shrink-0 w-[72px]" />
+                    )}
                     <OptionTypeIcon type={opt.type} />
                     <div className="flex-1 min-w-0">
                       <div className="text-text-primary truncate">
@@ -474,25 +540,6 @@ function PassengerRow({
                         </div>
                       )}
                     </div>
-                    {canResolve && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setResolvingId(opt.id);
-                          onResolve(passenger.id, opt.id).finally(() =>
-                            setResolvingId(null)
-                          );
-                        }}
-                        disabled={resolvingId !== null}
-                        className={`shrink-0 ml-2 px-3 py-1.5 text-xs font-mono font-semibold rounded transition-colors cursor-pointer ${
-                          resolvingId === opt.id
-                            ? "bg-accent-green/30 text-accent-green"
-                            : "bg-accent-green/15 text-accent-green hover:bg-accent-green/25"
-                        } disabled:opacity-50 disabled:cursor-not-allowed`}
-                      >
-                        {resolvingId === opt.id ? "Resolving..." : "Resolve"}
-                      </button>
-                    )}
                   </div>
                 );
               })}
