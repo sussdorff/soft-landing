@@ -9,6 +9,16 @@ and this project uses [CalVer](https://calver.org/) versioning (YYYY.0M.MICRO).
 
 ### Added
 
+- **backend**: Add status-based passenger differentiation and wire all external APIs
+
+### Maintenance
+
+- Add lufthansa-api skill for LH Open API queries
+
+## [2026.02.4] - 2026-02-28
+
+### Added
+
 - Initial Safe-Landing KMP project setup
 - **dashboard**: Make agent control buttons much more prominent
 - **docs**: Add user documentation site with MkDocs Material
@@ -21,6 +31,7 @@ and this project uses [CalVer](https://calver.org/) versioning (YYYY.0M.MICRO).
 ### Documentation
 
 - Add CLAUDE.md for Claude Code onboarding
+- Update changelog
 
 ### Fixed
 
@@ -30,6 +41,7 @@ and this project uses [CalVer](https://calver.org/) versioning (YYYY.0M.MICRO).
 ### Maintenance
 
 - Bump version to 2026.02.3
+- Bump version to 2026.02.4
 
 ## [2026.02.3] - 2026-02-28
 
