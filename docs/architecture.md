@@ -353,6 +353,7 @@ classDiagram
         +string origin
         +string destination
         +string reason
+        +string explanation (Gemini plain-language)
         +datetime detectedAt
         +string[] affectedPassengerIds
     }
@@ -386,15 +387,55 @@ classDiagram
         +string description
         +object details
         +bool available
+        +datetime estimatedArrival
     }
+
+    class RebookDetails {
+        +string flightNumber
+        +string origin
+        +string destination
+        +datetime departure
+        +string seatAvailable
+    }
+
+    class HotelDetails {
+        +string hotelName
+        +string address
+        +LatLng location
+        +string nextFlightNumber
+        +datetime nextFlightDeparture
+    }
+
+    class GroundTransportDetails {
+        +string mode: train | bus
+        +string route
+        +datetime departure
+        +datetime arrival
+        +string provider
+    }
+
+    class AltAirportDetails {
+        +string viaAirport
+        +string connectingFlight
+        +string transferMode: train | bus | taxi
+        +datetime totalArrival
+    }
+
+    Option --> RebookDetails
+    Option --> HotelDetails
+    Option --> GroundTransportDetails
+    Option --> AltAirportDetails
 
     class Wish {
         +string id
         +string passengerId
+        +string disruptionId
         +string selectedOptionId
         +string[] rankedOptionIds
         +datetime submittedAt
         +string status: pending | approved | denied
+        +string denialReason
+        +string confirmationDetails
     }
 
     Passenger --> Itinerary
@@ -423,18 +464,42 @@ graph LR
     end
 ```
 
+### WebSocket Connections
+
+```
+WS /ws/passenger/{passenger_id}     ← Passenger App connects here
+WS /ws/dashboard/{disruption_id}    ← Gate Agent Dashboard connects here
+```
+
+**Message envelope** (all WS messages use this shape):
+
+```json
+{
+  "type": "wish_confirmed | options_available | ...",
+  "timestamp": "2026-03-01T14:30:00Z",
+  "data": { ... }
+}
+```
+
 ### REST Endpoints
 
 | Method | Path | Used by | Purpose |
 |--------|------|---------|---------|
 | POST | `/disruptions/simulate` | Simulator | Inject mock disruption |
-| GET | `/disruptions/:id` | Dashboard | Get disruption details |
-| GET | `/disruptions/:id/passengers` | Dashboard | List affected passengers |
-| GET | `/passengers/:id/options` | Passenger App | Get available options |
-| POST | `/passengers/:id/wish` | Passenger App | Submit preference |
+| GET | `/disruptions/:id` | Dashboard | Get disruption details + explanation |
+| GET | `/disruptions/:id/passengers` | Dashboard | List affected passengers (sorted by priority → timestamp) |
+| GET | `/passengers/:id/disruptions` | Passenger App | List active disruptions affecting this passenger |
+| GET | `/passengers/:id/options` | Passenger App | Get available options with details |
+| GET | `/passengers/:id/status` | Passenger App | Current state: waiting / approved / denied |
+| POST | `/passengers/:id/wish` | Passenger App | Submit ranked preference(s) |
+| GET | `/passengers/:id/profile` | Dashboard | Full profile for manual resolution (itinerary, wishes, denial history) |
 | POST | `/wishes/:id/approve` | Dashboard | Approve a wish |
 | POST | `/wishes/:id/deny` | Dashboard | Deny a wish with reason |
-| GET | `/wishes?disruption_id=X` | Dashboard | Stream of wishes for a disruption |
+| GET | `/wishes?disruption_id=X` | Dashboard | All wishes for a disruption |
+
+**Authentication (hackathon scope):**
+- Passenger App: booking reference + last name as token
+- Gate Agent Dashboard: static API key or unauth'd for demo
 
 ---
 
