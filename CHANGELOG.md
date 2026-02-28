@@ -7,9 +7,23 @@ and this project uses [CalVer](https://calver.org/) versioning (YYYY.0M.MICRO).
 
 ## [Unreleased]
 
+### Fixed
+
+- **backend**: Use correct LH API cabin codes for seat map requests
+
+## [2026.02.10] - 2026-02-28
+
 ### Added
 
 - **backend,dashboard**: Wire LH API into seed scenarios and add lounge/voucher support
+
+### Documentation
+
+- Update changelog
+
+### Maintenance
+
+- Bump version to 2026.02.10
 
 ## [2026.02.9] - 2026-02-28
 
