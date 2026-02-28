@@ -1,6 +1,6 @@
 # ReRoute — Passenger Disruption Management
 
-> 2026-02-28 — Dual-view system: passenger app + gate agent dashboard + backend agent
+> 2026-02-28 — Dual-view system: passenger app (KMP) + gate agent dashboard + backend agent
 
 ---
 
@@ -8,9 +8,9 @@
 
 1. **Backend / Agent Server** — The brain. Connects to Lufthansa API + Google Grounding. Detects disruptions, generates options, manages state, handles cascading logic.
 
-2. **Passenger App** (web-based) — Each passenger gets notifications and options. They express preferences. They get informed about what's happening and why.
+2. **Passenger App** (Kotlin Multiplatform — Android, iOS, Web) — Each passenger gets notifications and options. They express preferences. They get informed about what's happening and why.
 
-3. **Gate Agent Dashboard** (web-based) — Operator sees all affected passengers, their wishes, approves/denies, handles conflicts. Human-in-the-loop with final say.
+3. **Gate Agent Dashboard** (React, WebSocket-based) — Operator sees all affected passengers, their wishes, approves/denies, handles conflicts. Human-in-the-loop with final say. Real-time updates as passenger wishes stream in.
 
 ---
 
@@ -228,8 +228,10 @@ System generates options per passenger
 
 ## Open Questions
 
-- [ ] App implementation for demo: responsive web page is simplest
+- [x] ~~App implementation for demo~~ → Kotlin Multiplatform (Android, iOS, Web)
+- [x] ~~Frontend framework choice~~ → KMP with Compose Multiplatform for passenger app; React for gate agent dashboard
+- [x] ~~Real-time updates~~ → WebSockets (critical for gate agent dashboard live updates)
+- [x] ~~Gate Agent Dashboard framework~~ → React with WebSockets (reference: Mira project)
+- [x] ~~Backend choice~~ → Python 3.14 (Gemini SDK, agent orchestration)
 - [ ] How to simulate MQTT disruption events for demo?
 - [ ] Mock data: how many passengers per scenario?
-- [ ] Frontend framework choice
-- [ ] Real-time updates: WebSocket between backend and frontends?

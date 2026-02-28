@@ -39,12 +39,21 @@ Based on organizer hints:
 
 ---
 
-## Stack Ideas (not confirmed)
+## Stack Decisions
 
-| Layer | Options |
-|-------|---------|
-| LLM | Gemini 2.0 Pro / Flash (with Grounding enabled) |
-| Backend | Python (LangChain/LangGraph) or TypeScript |
-| Frontend | Next.js or lightweight Streamlit for demo |
-| Data | Lufthansa Flight Ops API + GDS APIs (if accessible) |
-| Grounding | Google Search + Google Maps via Gemini Grounding API |
+| Layer | Choice | Notes |
+|-------|--------|-------|
+| LLM | Gemini 2.0 Pro / Flash (with Grounding enabled) | |
+| Backend | **Python 3.14** | Gemini SDK, agent orchestration |
+| Passenger App | **Kotlin Multiplatform (KMP)** | Targets: Android, iOS, Web. Compiles to native binaries (no runtime layer like Flutter). Can interop with Swift code on iOS. |
+| Gate Agent Dashboard | **React** (web) | WebSocket-based for real-time notifications. Reference: Mira project for WS setup. |
+| Real-time | **WebSockets** | Critical for gate agent dashboard — live updates as passenger wishes stream in |
+| Data | Lufthansa Flight Ops API + GDS APIs (if accessible) | |
+| Grounding | Google Search + Google Maps via Gemini Grounding API | |
+
+### Why KMP over Flutter
+
+- KMP compiles to **native binaries** — on iOS it's indistinguishable from a native app
+- Flutter has a rendering middle layer; KMP does not
+- KMP can interop with existing Swift code — you can implement Swift-native patterns in Kotlin
+- Compose Multiplatform for shared UI across Android/iOS/Web
