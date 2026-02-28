@@ -147,6 +147,12 @@ class TestGetSeatMap:
         assert data == {}
 
 
+class TestGetNearestAirports:
+    async def test_returns_empty_dict(self, adapter: StaticDataAdapter):
+        data = await adapter.get_nearest_airports(48.354, 11.775)
+        assert data == {}
+
+
 class TestGetAirportInfo:
     async def test_returns_empty_dict(self, adapter: StaticDataAdapter):
         data = await adapter.get_airport_info("MUC")

@@ -75,6 +75,13 @@ class LufthansaAPIAdapter(FlightDataPort):
             log.error("LH API error (seat map %s)", flight_number, exc_info=True)
             return {}
 
+    async def get_nearest_airports(self, latitude: float, longitude: float) -> dict:
+        try:
+            return await self._client.get_nearest_airports(latitude, longitude)
+        except Exception:
+            log.error("LH API error (nearest airports %.3f,%.3f)", latitude, longitude, exc_info=True)
+            return {}
+
     async def get_airport_info(self, airport_code: str) -> dict:
         try:
             return await self._client.get_airport_info(airport_code)

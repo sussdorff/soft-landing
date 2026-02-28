@@ -64,6 +64,13 @@ async def test_get_airport_info_delegates(adapter: LufthansaAPIAdapter, mock_cli
     assert result == {"AirportResource": {}}
 
 
+async def test_get_nearest_airports_delegates(adapter: LufthansaAPIAdapter, mock_client: AsyncMock):
+    mock_client.get_nearest_airports.return_value = {"NearestAirportResource": {}}
+    result = await adapter.get_nearest_airports(48.354, 11.775)
+    mock_client.get_nearest_airports.assert_awaited_once_with(48.354, 11.775)
+    assert result == {"NearestAirportResource": {}}
+
+
 # --- Error handling tests ---
 
 
@@ -94,4 +101,10 @@ async def test_get_seat_map_returns_empty_on_error(adapter: LufthansaAPIAdapter,
 async def test_get_airport_info_returns_empty_on_error(adapter: LufthansaAPIAdapter, mock_client: AsyncMock):
     mock_client.get_airport_info.side_effect = LufthansaAPIError(404, "Not found")
     result = await adapter.get_airport_info("XYZ")
+    assert result == {}
+
+
+async def test_get_nearest_airports_returns_empty_on_error(adapter: LufthansaAPIAdapter, mock_client: AsyncMock):
+    mock_client.get_nearest_airports.side_effect = LufthansaAPIError(500, "Server Error")
+    result = await adapter.get_nearest_airports(48.354, 11.775)
     assert result == {}

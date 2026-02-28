@@ -260,6 +260,194 @@ class TestParseScheduleCandidates:
         assert candidates[0][0] == "LH100"
 
 
+class TestFlightStatusFiltering:
+    """Cancelled rebook candidates should be skipped."""
+
+    async def test_skips_cancelled_candidate_picks_next(
+        self, mock_flight_data, mock_grounding, mock_option_repo,
+    ):
+        """When the first schedule candidate is cancelled, use the next one."""
+        mock_flight_data.get_schedules.return_value = {
+            "ScheduleResource": {
+                "Schedule": [
+                    {
+                        "Flight": {
+                            "MarketingCarrier": {"AirlineID": "LH", "FlightNumber": "98"},
+                            "Departure": {
+                                "AirportCode": "MUC",
+                                "ScheduledTimeLocal": {"DateTime": "2026-03-02T06:30"},
+                            },
+                            "Arrival": {"AirportCode": "FRA"},
+                        },
+                    },
+                    {
+                        "Flight": {
+                            "MarketingCarrier": {"AirlineID": "LH", "FlightNumber": "100"},
+                            "Departure": {
+                                "AirportCode": "MUC",
+                                "ScheduledTimeLocal": {"DateTime": "2026-03-02T08:00"},
+                            },
+                            "Arrival": {"AirportCode": "FRA"},
+                        },
+                    },
+                ],
+            },
+        }
+        # LH98 is cancelled, LH100 is operating
+        def status_side_effect(flight_number, date):
+            if flight_number == "LH98":
+                return {"FlightStatusResource": {"Flights": {"Flight": [
+                    {"FlightStatus": {"Code": "CD", "Definition": "Flight Cancelled"}}
+                ]}}}
+            return {}
+
+        mock_flight_data.get_flight_status.side_effect = status_side_effect
+
+        gen = OptionGenerator(mock_flight_data, mock_grounding, mock_option_repo)
+        await gen.generate_options(
+            "dis-001", "pax-001", DisruptionType.CANCELLATION, "FRA",
+        )
+
+        # The rebook option should use LH100, not LH98
+        rebook_call = mock_option_repo.create_option.call_args_list[0]
+        assert rebook_call.kwargs["option_type"] == "rebook"
+        assert "LH100" in rebook_call.kwargs["summary"]
+
+    async def test_all_candidates_cancelled_falls_through_to_generic(
+        self, mock_flight_data, mock_grounding, mock_option_repo,
+    ):
+        """When all candidates are cancelled, fall through to generic rebook."""
+        mock_flight_data.get_schedules.return_value = {
+            "ScheduleResource": {
+                "Schedule": [{
+                    "Flight": {
+                        "MarketingCarrier": {"AirlineID": "LH", "FlightNumber": "98"},
+                        "Departure": {
+                            "AirportCode": "MUC",
+                            "ScheduledTimeLocal": {"DateTime": "2026-03-02T06:30"},
+                        },
+                        "Arrival": {"AirportCode": "FRA"},
+                    },
+                }],
+            },
+        }
+        mock_flight_data.get_flight_status.return_value = {
+            "FlightStatusResource": {"Flights": {"Flight": [
+                {"FlightStatus": {"Code": "CD", "Definition": "Flight Cancelled"}}
+            ]}},
+        }
+
+        gen = OptionGenerator(mock_flight_data, mock_grounding, mock_option_repo)
+        await gen.generate_options(
+            "dis-001", "pax-001", DisruptionType.CANCELLATION, "FRA",
+        )
+
+        rebook_call = mock_option_repo.create_option.call_args_list[0]
+        assert rebook_call.kwargs["option_type"] == "rebook"
+        assert "LHXXXX" in rebook_call.kwargs["details"].flight_number
+
+    async def test_non_cancelled_status_not_filtered(
+        self, mock_flight_data, mock_grounding, mock_option_repo,
+    ):
+        """Flights with status DP/LD/NA/empty should not be filtered out."""
+        mock_flight_data.get_flight_status.return_value = {
+            "FlightStatusResource": {"Flights": {"Flight": [
+                {"FlightStatus": {"Code": "NA", "Definition": "No status"}}
+            ]}},
+        }
+
+        gen = OptionGenerator(mock_flight_data, mock_grounding, mock_option_repo)
+        await gen.generate_options(
+            "dis-001", "pax-001", DisruptionType.CANCELLATION, "FRA",
+        )
+
+        rebook_call = mock_option_repo.create_option.call_args_list[0]
+        assert "LH98" in rebook_call.kwargs["summary"]
+
+    async def test_flight_status_api_failure_does_not_filter(
+        self, mock_flight_data, mock_grounding, mock_option_repo,
+    ):
+        """If flight status returns empty dict (API failure), keep the candidate."""
+        mock_flight_data.get_flight_status.return_value = {}
+
+        gen = OptionGenerator(mock_flight_data, mock_grounding, mock_option_repo)
+        await gen.generate_options(
+            "dis-001", "pax-001", DisruptionType.CANCELLATION, "FRA",
+        )
+
+        rebook_call = mock_option_repo.create_option.call_args_list[0]
+        assert "LH98" in rebook_call.kwargs["summary"]
+
+
+class TestSeatMapCheck:
+    """Seat availability should be checked via Seat Maps API for real candidates."""
+
+    async def test_seat_available_when_seat_map_returns_data(
+        self, mock_flight_data, mock_grounding, mock_option_repo,
+    ):
+        """Non-empty seat map response means seats are available."""
+        mock_flight_data.get_seat_map.return_value = {
+            "SeatAvailabilityResource": {"some": "data"},
+        }
+
+        gen = OptionGenerator(mock_flight_data, mock_grounding, mock_option_repo)
+        await gen.generate_options(
+            "dis-001", "pax-001", DisruptionType.CANCELLATION, "FRA",
+        )
+
+        rebook_call = mock_option_repo.create_option.call_args_list[0]
+        assert rebook_call.kwargs["details"].seat_available is True
+
+    async def test_seat_unavailable_when_seat_map_empty(
+        self, mock_flight_data, mock_grounding, mock_option_repo,
+    ):
+        """Empty seat map response means no seats — seat_available=False."""
+        mock_flight_data.get_seat_map.return_value = {}
+
+        gen = OptionGenerator(mock_flight_data, mock_grounding, mock_option_repo)
+        await gen.generate_options(
+            "dis-001", "pax-001", DisruptionType.CANCELLATION, "FRA",
+        )
+
+        rebook_call = mock_option_repo.create_option.call_args_list[0]
+        assert rebook_call.kwargs["details"].seat_available is False
+
+    async def test_seat_map_called_with_correct_args(
+        self, mock_flight_data, mock_grounding, mock_option_repo,
+    ):
+        """Seat map should be queried for the selected candidate."""
+        mock_flight_data.get_seat_map.return_value = {"SeatAvailabilityResource": {}}
+
+        gen = OptionGenerator(mock_flight_data, mock_grounding, mock_option_repo)
+        await gen.generate_options(
+            "dis-001", "pax-001", DisruptionType.CANCELLATION, "FRA",
+        )
+
+        mock_flight_data.get_seat_map.assert_called_once()
+        call_args = mock_flight_data.get_seat_map.call_args
+        assert call_args.args[0] == "LH98"  # flight number
+        assert call_args.args[1] == "MUC"   # origin
+        assert call_args.args[2] == "FRA"   # destination
+        # date and cabin_class also passed
+        assert call_args.args[4] == "M"     # default cabin class
+
+    async def test_generic_rebook_keeps_seat_available_true(
+        self, mock_flight_data, mock_grounding, mock_option_repo,
+    ):
+        """The generic LHXXXX fallback should always have seat_available=True."""
+        mock_flight_data.get_schedules.return_value = {}  # No schedule candidates
+
+        gen = OptionGenerator(mock_flight_data, mock_grounding, mock_option_repo)
+        await gen.generate_options(
+            "dis-001", "pax-001", DisruptionType.CANCELLATION, "FRA",
+        )
+
+        rebook_call = mock_option_repo.create_option.call_args_list[0]
+        assert rebook_call.kwargs["details"].seat_available is True
+        # Seat map should NOT have been called for generic rebook
+        mock_flight_data.get_seat_map.assert_not_called()
+
+
 class TestParseBestLounge:
     def test_parses_lounge_data(self):
         data = {

@@ -181,20 +181,30 @@ class OptionGenerator:
         if svc.upgrade_eligible:
             upgrade_note = " Upgrade to higher cabin possible if available."
 
+        # Filter out cancelled flights via flight status check
         if candidates:
             candidates.sort(key=lambda t: (t[3], t[4]))
+            candidates = await self._filter_cancelled(candidates, next_day_str)
+
+        if candidates:
             tpl = candidates[0]
             dep = next_day.replace(
                 hour=tpl[3], minute=tpl[4], second=0, microsecond=0,
             )
             arr = dep + timedelta(hours=1, minutes=30)
 
+            # Check seat availability via Seat Maps API
+            seat_data = await self._flight_data.get_seat_map(
+                tpl[0], tpl[1], tpl[2], next_day_str, "M",
+            )
+            seat_available = bool(seat_data)
+
             details_json = {
                 "flight_number": tpl[0],
                 "origin": tpl[1],
                 "destination": tpl[2],
                 "departure": dep.isoformat(),
-                "seat_available": True,
+                "seat_available": seat_available,
             }
             fallback_desc = (
                 f"Next available flight {tpl[0]} {tpl[1]}-{tpl[2]} tomorrow. "
@@ -288,6 +298,40 @@ class OptionGenerator:
         if loyalty_tier == LoyaltyTier.FREQUENT_TRAVELLER:
             return "Rebooking within Lufthansa Group (LH, OS, LX, SN)."
         return "Rebooking within Lufthansa Group."
+
+    async def _filter_cancelled(
+        self,
+        candidates: list[tuple[str, str, str, int, int]],
+        date: str,
+    ) -> list[tuple[str, str, str, int, int]]:
+        """Remove candidates whose flight status is CD (Cancelled)."""
+        result = []
+        for tpl in candidates:
+            flight_code = tpl[0]
+            status_data = await self._flight_data.get_flight_status(flight_code, date)
+            if not self._is_cancelled(status_data):
+                result.append(tpl)
+        return result
+
+    @staticmethod
+    def _is_cancelled(status_data: dict) -> bool:
+        """Check if a FlightStatusResource indicates cancellation (Code=CD)."""
+        try:
+            flights = (
+                status_data
+                .get("FlightStatusResource", {})
+                .get("Flights", {})
+                .get("Flight", [])
+            )
+            if isinstance(flights, dict):
+                flights = [flights]
+            for flight in flights:
+                code = flight.get("FlightStatus", {}).get("Code", "")
+                if code == "CD":
+                    return True
+        except Exception:
+            pass
+        return False
 
     # ------------------------------------------------------------------
     # Hotel

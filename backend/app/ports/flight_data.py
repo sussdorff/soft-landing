@@ -99,6 +99,22 @@ class FlightDataPort(ABC):
         """
 
     @abstractmethod
+    async def get_nearest_airports(
+        self,
+        latitude: float,
+        longitude: float,
+    ) -> dict:
+        """Return nearest airports for a geographic position.
+
+        Args:
+            latitude: Latitude (-90 to +90).
+            longitude: Longitude (-180 to +180).
+
+        Returns:
+            Parsed nearest-airport resource.  Empty dict on failure.
+        """
+
+    @abstractmethod
     async def get_airport_info(self, airport_code: str) -> dict:
         """Return airport reference data.
 

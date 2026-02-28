@@ -477,6 +477,9 @@ class StaticDataAdapter(FlightDataPort, GroundingPort):
     ) -> dict:
         return {}
 
+    async def get_nearest_airports(self, latitude: float, longitude: float) -> dict:
+        return {}
+
     async def get_airport_info(self, airport_code: str) -> dict:
         return {}
 
