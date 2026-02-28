@@ -25,6 +25,7 @@ class DisruptionType(StrEnum):
     CANCELLATION = auto()
     DIVERSION = auto()
     DELAY = auto()
+    GATE_CHANGE = auto()
 
 
 class PassengerStatus(StrEnum):
@@ -166,3 +167,13 @@ class DenyRequest(CamelModel):
 
 class SimulateRequest(CamelModel):
     scenario: str = "munich_snowstorm"
+
+
+class IngestEventRequest(CamelModel):
+    """Raw disruption event — simulates what MQTT would deliver."""
+    flight_number: str
+    origin: str
+    destination: str
+    reason: str
+    status_code: str = ""  # e.g. "CNL", "DVT", "DLY", "GCH"
+    explanation: str = ""

@@ -12,7 +12,6 @@ from app.db.tables import (
     DisruptionRow,
     OptionRow,
     PassengerRow,
-    SegmentRow,
     WishRow,
 )
 from app.models import (
@@ -27,7 +26,6 @@ from app.models import (
     PassengerStatus,
     RebookDetails,
     Segment,
-    TransferMode,
     Wish,
     WishStatus,
 )

@@ -15,7 +15,7 @@ from app.db.tables import (
     PassengerRow,
     SegmentRow,
 )
-from app.seeds.passengers import make_booking_ref, pick_passengers
+from app.seeds.passengers import pick_passengers
 
 # Cancelled flights departing MUC
 CANCELLED_FLIGHTS = [

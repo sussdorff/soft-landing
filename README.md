@@ -259,10 +259,17 @@ System generates options per passenger
 
 | Route | Target | Purpose |
 |-------|--------|---------|
-| `/api/*` | Python backend (port 8000) | REST API |
-| `/ws/*` | Python backend (port 8000) | WebSocket real-time updates |
 | `/dashboard/*` | Static files | Gate Agent Dashboard (React SPA) |
 | `/app/*` | Static files | Passenger App (KMP web target) |
+| `/*` (default) | Python backend (port 8000) | REST API + WebSocket |
+
+**API Documentation:**
+
+| URL | What |
+|-----|------|
+| [`/api/docs`](https://softlanding.sussdorff.de/api/docs) | Swagger UI — interactive API explorer (try endpoints live) |
+| [`/api/redoc`](https://softlanding.sussdorff.de/api/redoc) | ReDoc — clean API reference for frontend devs |
+| [`/api/openapi.json`](https://softlanding.sussdorff.de/api/openapi.json) | OpenAPI spec (use for code generation) |
 
 **Stack on server:** Docker, Node.js 22, Python 3.14 (via uv), Caddy (reverse proxy + auto-TLS via Let's Encrypt). CORS enabled for mobile app access.
 

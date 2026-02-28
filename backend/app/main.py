@@ -1,7 +1,6 @@
 """ReRoute — FastAPI backend for airline disruption management."""
 
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime
 
 from fastapi import Depends, FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -9,8 +8,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import store
 from app.db.engine import async_session, get_session, init_db
-from app.models import DenyRequest, SimulateRequest, Wish, WishRequest, WishStatus
+from app.models import DenyRequest, IngestEventRequest, SimulateRequest, WishRequest
 from app.seeds import scenario_snowstorm
+from app.services.disruption_engine import DisruptionEngine
 from app.ws import manager
 
 
@@ -29,6 +29,9 @@ app = FastAPI(
     description="Passenger disruption management for Lufthansa hackathon",
     version="0.1.0",
     lifespan=lifespan,
+    docs_url="/api/docs",
+    redoc_url="/api/redoc",
+    openapi_url="/api/openapi.json",
 )
 
 app.add_middleware(
@@ -38,6 +41,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Disruption engine instance (shared across requests)
+engine = DisruptionEngine(async_session, manager)
 
 
 # --- Disruptions ---
@@ -59,6 +65,40 @@ async def simulate_disruption(req: SimulateRequest, session: AsyncSession = Depe
     dis = await store.get_disruption(session, dis_id)
     if not dis:
         raise HTTPException(500, "Failed to seed scenario")
+
+    # Send WS notifications for the seeded disruption
+    await manager.send_to_dashboard(dis.id, "disruption_created", {
+        "disruptionId": dis.id,
+        "type": dis.type.value,
+        "flightNumber": dis.flight_number,
+        "affectedPassengers": len(dis.affected_passenger_ids),
+    })
+    for pax_id in dis.affected_passenger_ids:
+        await manager.send_to_passenger(pax_id, "disruption_notification", {
+            "disruptionId": dis.id,
+            "type": dis.type.value,
+            "flightNumber": dis.flight_number,
+        })
+        await manager.send_to_passenger(pax_id, "options_ready", {
+            "disruptionId": dis.id,
+            "passengerId": pax_id,
+        })
+
+    return dis.model_dump(by_alias=True, mode="json")
+
+
+@app.post("/disruptions/ingest")
+async def ingest_disruption(req: IngestEventRequest):
+    """Ingest a raw disruption event (simulates MQTT delivery).
+
+    The engine classifies the event, finds affected passengers,
+    generates options, and sends WebSocket notifications.
+    """
+    dis_id = await engine.ingest_event(req.model_dump())
+    async with async_session() as session:
+        dis = await store.get_disruption(session, dis_id)
+    if not dis:
+        raise HTTPException(500, "Failed to process event")
     return dis.model_dump(by_alias=True, mode="json")
 
 
@@ -193,7 +233,7 @@ async def ws_passenger(ws: WebSocket, passenger_id: str):
     await manager.connect_passenger(passenger_id, ws)
     try:
         while True:
-            data = await ws.receive_text()
+            await ws.receive_text()
             await ws.send_text('{"type":"ack","data":{}}')
     except WebSocketDisconnect:
         manager.disconnect_passenger(passenger_id, ws)
@@ -204,7 +244,7 @@ async def ws_dashboard(ws: WebSocket, disruption_id: str):
     await manager.connect_dashboard(disruption_id, ws)
     try:
         while True:
-            data = await ws.receive_text()
+            await ws.receive_text()
             await ws.send_text('{"type":"ack","data":{}}')
     except WebSocketDisconnect:
         manager.disconnect_dashboard(disruption_id, ws)

@@ -96,14 +96,11 @@ mkdir -p /opt/softlanding/{backend,dashboard,passenger-app}
 echo "==> Writing Caddyfile"
 cat > /etc/caddy/Caddyfile << CADDYFILE
 ${DOMAIN} {
-    # Backend API
-    handle /api/* {
-        reverse_proxy localhost:8000
-    }
-
-    # WebSocket for real-time updates
-    handle /ws/* {
-        reverse_proxy localhost:8000
+    # CORS headers for mobile apps
+    header {
+        Access-Control-Allow-Origin *
+        Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+        Access-Control-Allow-Headers "Content-Type, Authorization"
     }
 
     # Gate Agent Dashboard (React SPA)
@@ -120,16 +117,9 @@ ${DOMAIN} {
         file_server
     }
 
-    # Default: landing/health
+    # Backend API — everything else goes to FastAPI
     handle {
-        respond "ReRoute API is running" 200
-    }
-
-    # CORS headers for mobile apps
-    header {
-        Access-Control-Allow-Origin *
-        Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-        Access-Control-Allow-Headers "Content-Type, Authorization"
+        reverse_proxy localhost:8000
     }
 }
 CADDYFILE
