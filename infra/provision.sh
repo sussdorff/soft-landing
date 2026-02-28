@@ -103,6 +103,9 @@ ${DOMAIN} {
         Access-Control-Allow-Headers "Content-Type, Authorization"
     }
 
+    # Redirect /docs to /docs/
+    redir /docs /docs/ 308
+
     # User documentation (MkDocs Material)
     handle_path /docs/* {
         root * /opt/softlanding/docs/site
