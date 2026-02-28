@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type RefObject } from "react";
 import type { Disruption, Passenger, Option, Wish } from "../types";
 
 interface Props {
@@ -8,6 +8,7 @@ interface Props {
   wishesByPassenger: Map<string, Wish>;
   onViewProfile: (passengerId: string) => void;
   onResolve: (passengerId: string, optionId: string) => Promise<void>;
+  searchRef?: RefObject<HTMLInputElement | null>;
 }
 
 const OPTION_TYPE_ICONS: Record<string, string> = {
@@ -62,6 +63,7 @@ export function FlightOverview({
   wishesByPassenger,
   onViewProfile,
   onResolve,
+  searchRef,
 }: Props) {
   const [expandedPax, setExpandedPax] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
@@ -161,10 +163,11 @@ export function FlightOverview({
               /
             </span>
             <input
+              ref={searchRef}
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by name, PNR, airport, or flight..."
+              placeholder='Search by name, PNR, airport, or flight...  ( / )'
               className="w-full bg-surface-900/60 border border-surface-600 rounded-md pl-7 pr-3 py-2 text-sm text-text-primary placeholder:text-text-muted/50 font-mono focus:outline-none focus:border-accent-blue/50 focus:ring-1 focus:ring-accent-blue/20 transition-colors"
             />
             {search && (

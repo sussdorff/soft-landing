@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { Layout } from "./components/Layout";
 import { OverviewPanel } from "./components/OverviewPanel";
 import { FlightOverview } from "./components/FlightOverview";
@@ -11,6 +11,11 @@ import type { Disruption, Option, Wish } from "./types";
 
 type Tab = "overview" | "wishes";
 
+function isInputFocused() {
+  const el = document.activeElement;
+  return el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement;
+}
+
 function App() {
   const [disruptions, setDisruptions] = useState<Disruption[]>([]);
   const [disruptionId, setDisruptionId] = useState<string>("dis-001");
@@ -21,6 +26,11 @@ function App() {
   const [activeTab, setActiveTab] = useState<Tab>("overview");
   const [profileId, setProfileId] = useState<string | null>(null);
   const [optionsRaw, setOptionsRaw] = useState<Record<string, Option[]>>({});
+  const [showShortcuts, setShowShortcuts] = useState(false);
+
+  // Refs for focusing search inputs in child components
+  const paxSearchRef = useRef<HTMLInputElement>(null);
+  const flightSearchRef = useRef<HTMLInputElement>(null);
 
   // Load all disruptions for the flight selector
   useEffect(() => {
@@ -31,6 +41,51 @@ function App() {
   useEffect(() => {
     api.getOptions(disruptionId).then(setOptionsRaw);
   }, [disruptionId]);
+
+  // Global keyboard shortcuts
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      // Don't intercept when typing in inputs
+      if (isInputFocused()) {
+        if (e.key === "Escape") {
+          (document.activeElement as HTMLElement)?.blur();
+          e.preventDefault();
+        }
+        return;
+      }
+
+      switch (e.key) {
+        case "1":
+          setActiveTab("overview");
+          e.preventDefault();
+          break;
+        case "2":
+          setActiveTab("wishes");
+          e.preventDefault();
+          break;
+        case "/":
+          e.preventDefault();
+          paxSearchRef.current?.focus();
+          break;
+        case "f":
+          e.preventDefault();
+          flightSearchRef.current?.focus();
+          break;
+        case "Escape":
+          if (profileId) {
+            setProfileId(null);
+            e.preventDefault();
+          }
+          break;
+        case "?":
+          setShowShortcuts((s) => !s);
+          e.preventDefault();
+          break;
+      }
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [profileId]);
 
   // Build options map for wish cards and flight overview
   const optionsByPassenger = useMemo(() => {
@@ -89,6 +144,7 @@ function App() {
             pendingWishes={pendingWishes}
             disruptions={disruptions}
             onSelectDisruption={setDisruptionId}
+            flightSearchRef={flightSearchRef}
           />
         </div>
 
@@ -97,6 +153,7 @@ function App() {
           <TabButton
             active={activeTab === "overview"}
             onClick={() => setActiveTab("overview")}
+            shortcut="1"
           >
             Flight Overview
           </TabButton>
@@ -104,6 +161,7 @@ function App() {
             active={activeTab === "wishes"}
             onClick={() => setActiveTab("wishes")}
             count={pendingWishes.length}
+            shortcut="2"
           >
             Wish Stream
           </TabButton>
@@ -119,6 +177,7 @@ function App() {
               wishesByPassenger={wishesByPassenger}
               onViewProfile={setProfileId}
               onResolve={resolveManually}
+              searchRef={paxSearchRef}
             />
           ) : (
             <WishStream
@@ -133,6 +192,31 @@ function App() {
           )}
         </div>
       </div>
+
+      {/* Keyboard shortcuts bar */}
+      {showShortcuts && (
+        <div className="fixed bottom-0 left-0 right-0 bg-surface-800 border-t border-surface-600 px-5 py-2 flex items-center gap-6 z-50">
+          <span className="text-[10px] font-mono text-text-muted uppercase tracking-wider">Shortcuts</span>
+          <Kbd k="1">Flight Overview</Kbd>
+          <Kbd k="2">Wish Stream</Kbd>
+          <Kbd k="/">Search passengers</Kbd>
+          <Kbd k="F">Search flights</Kbd>
+          <Kbd k="Esc">Close / clear</Kbd>
+          <Kbd k="?">Toggle this bar</Kbd>
+        </div>
+      )}
+
+      {/* Shortcut hint in corner */}
+      {!showShortcuts && (
+        <button
+          onClick={() => setShowShortcuts(true)}
+          className="fixed bottom-3 right-3 px-2 py-1 text-[10px] font-mono text-text-muted bg-surface-800 border border-surface-600 rounded hover:text-text-secondary hover:border-surface-500 transition-colors cursor-pointer z-50"
+          title="Show keyboard shortcuts"
+        >
+          <span className="inline-block w-4 h-4 leading-4 text-center bg-surface-700 rounded text-[10px] mr-1">?</span>
+          shortcuts
+        </button>
+      )}
 
       {/* Passenger profile modal */}
       {profileId && (
@@ -149,11 +233,13 @@ function TabButton({
   active,
   onClick,
   count,
+  shortcut,
   children,
 }: {
   active: boolean;
   onClick: () => void;
   count?: number;
+  shortcut?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -165,6 +251,11 @@ function TabButton({
           : "text-text-muted hover:text-text-secondary hover:bg-surface-800/50 border-2 border-transparent"
       }`}
     >
+      {shortcut && (
+        <kbd className="inline-block w-5 h-5 leading-5 text-center text-[10px] font-mono bg-surface-700 border border-surface-500 rounded text-text-muted mr-2">
+          {shortcut}
+        </kbd>
+      )}
       {children}
       {count !== undefined && count > 0 && (
         <span className="ml-2 px-2 py-1 text-xs font-mono font-bold rounded-full bg-accent-blue text-surface-900 tabular-nums animate-pulse">
@@ -172,6 +263,17 @@ function TabButton({
         </span>
       )}
     </button>
+  );
+}
+
+function Kbd({ k, children }: { k: string; children: React.ReactNode }) {
+  return (
+    <span className="flex items-center gap-1.5 text-xs text-text-secondary">
+      <kbd className="inline-block min-w-[20px] px-1.5 py-0.5 text-center text-[11px] font-mono font-bold bg-surface-700 border border-surface-500 rounded text-text-primary">
+        {k}
+      </kbd>
+      <span className="text-text-muted">{children}</span>
+    </span>
   );
 }
 

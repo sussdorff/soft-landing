@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo, useRef, useEffect, type RefObject } from "react";
 import type { Disruption, Passenger, Wish } from "../types";
 
 interface Props {
@@ -7,6 +7,7 @@ interface Props {
   pendingWishes: Wish[];
   disruptions: Disruption[];
   onSelectDisruption: (id: string) => void;
+  flightSearchRef?: RefObject<HTMLInputElement | null>;
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -21,7 +22,7 @@ const TYPE_COLORS: Record<string, string> = {
   diversion: "bg-accent-blue/20 text-accent-blue",
 };
 
-export function OverviewPanel({ disruption, passengers, pendingWishes, disruptions, onSelectDisruption }: Props) {
+export function OverviewPanel({ disruption, passengers, pendingWishes, disruptions, onSelectDisruption, flightSearchRef }: Props) {
   const [collapsed, setCollapsed] = useState(false);
 
   const total = passengers.length;
@@ -42,6 +43,7 @@ export function OverviewPanel({ disruption, passengers, pendingWishes, disruptio
         disruptions={disruptions}
         currentId={disruption.id}
         onSelect={onSelectDisruption}
+        externalRef={flightSearchRef}
       />
 
       {/* Disruption detail */}
@@ -130,15 +132,24 @@ function FlightSearch({
   disruptions,
   currentId,
   onSelect,
+  externalRef,
 }: {
   disruptions: Disruption[];
   currentId: string;
   onSelect: (id: string) => void;
+  externalRef?: RefObject<HTMLInputElement | null>;
 }) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Sync external ref to internal input
+  useEffect(() => {
+    if (externalRef && "current" in externalRef) {
+      (externalRef as React.MutableRefObject<HTMLInputElement | null>).current = inputRef.current;
+    }
+  });
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -183,8 +194,8 @@ function FlightSearch({
             open
               ? "Search by flight, route, type..."
               : current
-                ? `${current.flightNumber}  ${current.origin} → ${current.destination}`
-                : "Select flight..."
+                ? `${current.flightNumber}  ${current.origin} → ${current.destination}  ( F )`
+                : "Select flight...  ( F )"
           }
           onFocus={() => {
             setOpen(true);
