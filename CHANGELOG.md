@@ -9,7 +9,22 @@ and this project uses [CalVer](https://calver.org/) versioning (YYYY.0M.MICRO).
 
 ### Added
 
+- **backend**: Add delay scenario — LH2072 MUC-HAM delayed 30 min
+- **backend**: Add ahead-of-flight context engine with pre-flight briefings
+
+## [2026.02.12] - 2026-02-28
+
+### Added
+
 - **backend**: Enrich approve/deny workflow with cascading impact preview
+
+### Documentation
+
+- Update changelog
+
+### Maintenance
+
+- Bump version to 2026.02.12
 
 ## [2026.02.11] - 2026-02-28
 
