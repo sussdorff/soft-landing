@@ -9,7 +9,25 @@ and this project uses [CalVer](https://calver.org/) versioning (YYYY.0M.MICRO).
 
 ### Fixed
 
+- **dashboard**: Handle unavailable options in wish stream approve button
+
+## [2026.02.14] - 2026-02-28
+
+### Added
+
+- **dashboard**: Promote Resolved to top-level tab alongside Flight Overview and Wish Stream
+
+### Documentation
+
+- Update changelog
+
+### Fixed
+
 - **backend**: Make simulate endpoint additive and split snowstorm into per-flight disruptions
+
+### Maintenance
+
+- Switch to native ARM runner, remove QEMU emulation
 
 ## [2026.02.13] - 2026-02-28
 
