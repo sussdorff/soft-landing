@@ -37,6 +37,7 @@ from app.ports.flight_data import FlightDataPort
 from app.ports.grounding import GroundingPort
 from app.ports.repositories import DisruptionRepository
 from app.seeds import scenario_snowstorm
+from app.services.ahead_of_flight import AheadOfFlightEngine
 from app.services.disruption_engine import DisruptionEngine
 from app.services.option_generator import OptionGenerator
 from app.services.gemini import GeminiGroundingService
@@ -106,7 +107,11 @@ async def lifespan(app: FastAPI):
         notification=notification,
     )
 
+    # Ahead-of-flight engine
+    ahead_engine = AheadOfFlightEngine(grounding, async_session)
+
     # Store on app.state for endpoint access
+    app.state.ahead_engine = ahead_engine
     app.state.engine = engine
     app.state.flight_data = flight_data
     app.state.grounding = grounding
@@ -578,6 +583,38 @@ async def search_rebook_options(
         loyalty_tier=loyalty_tier,
     )
     return [c.model_dump(by_alias=True, mode="json") for c in candidates]
+
+
+# --- Ahead-of-Flight Intelligence ---
+
+@app.get("/ahead-of-flight")
+async def get_ahead_of_flight_briefings(
+    request: Request,
+    hours: int = Query(6, ge=1, le=48),
+):
+    """Get pre-flight intelligence briefings for upcoming flights.
+
+    Scans flights departing within the given time window and returns
+    briefings with weather, disruption context, and passenger risk data.
+    """
+    engine: AheadOfFlightEngine = request.app.state.ahead_engine
+    briefings = await engine.scan_upcoming_flights(hours_ahead=hours)
+    return [b.model_dump(by_alias=True, mode="json") for b in briefings]
+
+
+@app.get("/ahead-of-flight/{flight_number}")
+async def get_flight_briefing(
+    request: Request,
+    flight_number: str,
+    date: str = Query(None),
+):
+    """Get a pre-flight intelligence briefing for a specific flight."""
+    engine: AheadOfFlightEngine = request.app.state.ahead_engine
+    flight_date = date or date_cls.today().isoformat()
+    briefing = await engine.get_flight_briefing(flight_number, flight_date)
+    if not briefing:
+        raise HTTPException(404, f"No passengers found for flight {flight_number}")
+    return briefing.model_dump(by_alias=True, mode="json")
 
 
 # --- WebSocket ---

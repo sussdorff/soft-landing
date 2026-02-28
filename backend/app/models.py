@@ -297,6 +297,26 @@ class Wish(CamelModel):
     confirmation_details: str | None = None
 
 
+# --- Flight Briefing ---
+
+class FlightBriefing(CamelModel):
+    """Pre-flight intelligence briefing for gate agents."""
+    flight_number: str
+    origin: str
+    destination: str
+    departure: datetime
+    weather_origin: str
+    weather_destination: str
+    disruption_info: str
+    airport_status: str
+    relevant_events: str
+    sources: list[str] = Field(default_factory=list)
+    passenger_count: int
+    vip_count: int
+    connection_count: int
+    risk_level: str  # "low", "medium", "high"
+
+
 # --- Request/Response helpers ---
 
 class WishRequest(CamelModel):
