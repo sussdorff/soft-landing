@@ -292,6 +292,19 @@ class SqlPassengerRepository(PassengerRepository):
                 pax.denial_count += 1
             await session.commit()
 
+    async def update_passenger_priority(
+        self,
+        passenger_id: str,
+        priority: int,
+    ) -> None:
+        async with self._session_factory() as session:
+            pax = await session.get(PassengerRow, passenger_id)
+            if not pax:
+                msg = f"Passenger {passenger_id} not found"
+                raise ValueError(msg)
+            pax.priority = priority
+            await session.commit()
+
 
 # ---------------------------------------------------------------------------
 # SQLAlchemy Option Repository
@@ -361,6 +374,13 @@ class SqlOptionRepository(OptionRepository):
             stmt = delete(OptionRow).where(OptionRow.id.in_(option_ids))
             await session.execute(stmt)
             await session.commit()
+
+    async def mark_unavailable(self, option_id: str) -> None:
+        async with self._session_factory() as session:
+            row = await session.get(OptionRow, option_id)
+            if row:
+                row.available = False
+                await session.commit()
 
 
 # ---------------------------------------------------------------------------
@@ -451,5 +471,24 @@ class SqlWishRepository(WishRepository):
             stmt = select(WishRow)
             if disruption_id:
                 stmt = stmt.where(WishRow.disruption_id == disruption_id)
+            rows = (await session.execute(stmt)).scalars().all()
+            return [_row_to_wish(r) for r in rows]
+
+    async def find_competing_wishes(
+        self,
+        disruption_id: str,
+        option_id: str,
+        exclude_passenger_id: str,
+    ) -> list[Wish]:
+        async with self._session_factory() as session:
+            stmt = (
+                select(WishRow)
+                .where(
+                    WishRow.disruption_id == disruption_id,
+                    WishRow.selected_option_id == option_id,
+                    WishRow.passenger_id != exclude_passenger_id,
+                    WishRow.status == WishStatus.PENDING.value,
+                )
+            )
             rows = (await session.execute(stmt)).scalars().all()
             return [_row_to_wish(r) for r in rows]

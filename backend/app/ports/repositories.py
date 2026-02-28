@@ -165,6 +165,22 @@ class PassengerRepository(ABC):
             ValueError: If the passenger does not exist.
         """
 
+    @abstractmethod
+    async def update_passenger_priority(
+        self,
+        passenger_id: str,
+        priority: int,
+    ) -> None:
+        """Update the passenger's priority score.
+
+        Args:
+            passenger_id: Unique passenger identifier.
+            priority: New priority value.
+
+        Raises:
+            ValueError: If the passenger does not exist.
+        """
+
 
 # ---------------------------------------------------------------------------
 # Option Repository
@@ -235,6 +251,17 @@ class OptionRepository(ABC):
 
         Args:
             option_ids: IDs of options to delete.  Missing IDs are ignored.
+        """
+
+    @abstractmethod
+    async def mark_unavailable(self, option_id: str) -> None:
+        """Mark a single option as unavailable.
+
+        Used when another passenger's approval consumes the resource
+        (e.g., last seat on a rebook flight).
+
+        Args:
+            option_id: The option to mark unavailable.  No-op if not found.
         """
 
 
@@ -321,4 +348,25 @@ class WishRepository(ABC):
 
         Returns:
             List of wishes (may be empty).
+        """
+
+    @abstractmethod
+    async def find_competing_wishes(
+        self,
+        disruption_id: str,
+        option_id: str,
+        exclude_passenger_id: str,
+    ) -> list[Wish]:
+        """Find pending wishes in the same disruption that selected the same option.
+
+        Used for cascading impact: when one passenger's wish is approved,
+        find others who wanted the same resource.
+
+        Args:
+            disruption_id: Scope to this disruption.
+            option_id: The option ID being approved.
+            exclude_passenger_id: The passenger being approved (skip them).
+
+        Returns:
+            List of competing pending wishes.
         """

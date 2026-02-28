@@ -31,6 +31,7 @@ from app.seeds import scenario_snowstorm
 from app.services.disruption_engine import DisruptionEngine
 from app.services.gemini import GeminiGroundingService
 from app.services.lufthansa import LufthansaClient
+from app.services.state_manager import StateManager
 from app.models import compute_service_level
 from app.ws import manager
 
@@ -87,6 +88,15 @@ async def lifespan(app: FastAPI):
         notification=notification,
     )
 
+    # State manager (priority escalation + cascading impact)
+    state_manager = StateManager(
+        passenger_repo=passenger_repo,
+        wish_repo=wish_repo,
+        option_repo=option_repo,
+        disruption_repo=disruption_repo,
+        notification=notification,
+    )
+
     # Store on app.state for endpoint access
     app.state.engine = engine
     app.state.flight_data = flight_data
@@ -96,6 +106,7 @@ async def lifespan(app: FastAPI):
     app.state.passenger_repo = passenger_repo
     app.state.option_repo = option_repo
     app.state.wish_repo = wish_repo
+    app.state.state_manager = state_manager
     app.state.lh_client = lh_client
 
     # Auto-seed snowstorm scenario if DB is empty
@@ -321,16 +332,12 @@ async def resolve_passenger(passenger_id: str, req: ResolveRequest, request: Req
         "selectedOptionId": req.selected_option_id,
     })
 
-    wish = await request.app.state.wish_repo.approve_wish(wish.id)
-    if not wish:
+    sm: StateManager = request.app.state.state_manager
+    result = await sm.handle_approval(wish.id, req.disruption_id)
+    if not result.approved_wish:
         raise HTTPException(500, "Failed to approve wish")
 
-    await request.app.state.notification.send_to_passenger(passenger_id, "wish_approved", {
-        "wishId": wish.id,
-        "selectedOptionId": wish.selected_option_id,
-    })
-
-    return wish.model_dump(by_alias=True, mode="json")
+    return result.approved_wish.model_dump(by_alias=True, mode="json")
 
 
 # --- Wishes ---
@@ -341,30 +348,57 @@ async def list_wishes(request: Request, disruption_id: str = Query(None)):
     return [w.model_dump(by_alias=True, mode="json") for w in result]
 
 
-@app.post("/wishes/{wish_id}/approve")
-async def approve_wish(wish_id: str, request: Request):
-    wish = await request.app.state.wish_repo.approve_wish(wish_id)
+@app.get("/wishes/{wish_id}")
+async def get_wish(wish_id: str, request: Request):
+    wish = await request.app.state.wish_repo.get_wish(wish_id)
     if not wish:
         raise HTTPException(404, "Wish not found")
-
-    await request.app.state.notification.send_to_passenger(wish.passenger_id, "wish_approved", {
-        "wishId": wish.id,
-        "selectedOptionId": wish.selected_option_id,
-    })
     return wish.model_dump(by_alias=True, mode="json")
+
+
+@app.post("/wishes/{wish_id}/approve")
+async def approve_wish(
+    wish_id: str,
+    request: Request,
+    disruption_id: str = Query(None, alias="disruptionId"),
+):
+    # Look up disruption_id from the wish if not provided
+    if not disruption_id:
+        wish = await request.app.state.wish_repo.get_wish(wish_id)
+        if not wish:
+            raise HTTPException(404, "Wish not found")
+        disruption_id = wish.disruption_id
+
+    sm: StateManager = request.app.state.state_manager
+    result = await sm.handle_approval(wish_id, disruption_id)
+    if not result.approved_wish:
+        raise HTTPException(404, "Wish not found")
+
+    return {
+        "wish": result.approved_wish.model_dump(by_alias=True, mode="json"),
+        "affectedPassengerIds": result.affected_passenger_ids,
+    }
 
 
 @app.post("/wishes/{wish_id}/deny")
 async def deny_wish(wish_id: str, req: DenyRequest, request: Request):
-    wish = await request.app.state.wish_repo.deny_wish(wish_id, req.reason)
+    # Look up the wish first to get disruption_id and passenger_id
+    wish = await request.app.state.wish_repo.get_wish(wish_id)
     if not wish:
         raise HTTPException(404, "Wish not found")
 
+    sm: StateManager = request.app.state.state_manager
+    denied = await sm.handle_denial(
+        wish_id, wish.disruption_id, wish.passenger_id, reason=req.reason,
+    )
+    if not denied:
+        raise HTTPException(404, "Wish not found")
+
     await request.app.state.notification.send_to_passenger(wish.passenger_id, "wish_denied", {
-        "wishId": wish.id,
+        "wishId": denied.id,
         "reason": req.reason,
     })
-    return wish.model_dump(by_alias=True, mode="json")
+    return denied.model_dump(by_alias=True, mode="json")
 
 
 # --- Lufthansa API ---
