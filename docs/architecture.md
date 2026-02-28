@@ -498,8 +498,8 @@ WS /ws/dashboard/{disruption_id}    ← Gate Agent Dashboard connects here
 | GET | `/wishes?disruption_id=X` | Dashboard | All wishes for a disruption |
 
 **Authentication (hackathon scope):**
-- Passenger App: booking reference + last name as token
-- Gate Agent Dashboard: static API key or unauth'd for demo
+- Passenger App: PNR + last name as identifier (passengers know their PNR, last name adds lightweight security)
+- Gate Agent Dashboard: unauth'd for demo
 
 ---
 
@@ -514,7 +514,7 @@ graph LR
     end
 
     subgraph Frameworks
-        FAST["FastAPI / Flask"]
+        FAST["FastAPI"]
         COMPOSE["Compose Multiplatform"]
         REACT["React"]
     end

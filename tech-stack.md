@@ -48,7 +48,7 @@ Lead with the **gate agent dashboard** as the primary product. The story: "A sin
 | Layer | Choice | Notes |
 |-------|--------|-------|
 | LLM | Gemini 3.0 (with Grounding enabled) | |
-| Backend | **Python 3.14** | Gemini SDK, agent orchestration |
+| Backend | **Python 3.14 + FastAPI** | Gemini SDK, agent orchestration, native WebSocket + async, Pydantic models, auto OpenAPI docs |
 | Passenger App | **Kotlin Multiplatform (KMP)** | Targets: Android, iOS, Web. Compiles to native binaries (no runtime layer like Flutter). Can interop with Swift code on iOS. |
 | Gate Agent Dashboard | **React** (web) | WebSocket-based for real-time notifications. Reference: Mira project for WS setup. |
 | Real-time | **WebSockets** | Critical for gate agent dashboard — live updates as passenger wishes stream in |

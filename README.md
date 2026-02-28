@@ -243,4 +243,8 @@ System generates options per passenger
 - [x] ~~Gate Agent Dashboard framework~~ → React with WebSockets (reference: Mira project)
 - [x] ~~Backend choice~~ → Python 3.14 (Gemini SDK, agent orchestration)
 - [x] ~~How to simulate MQTT disruption events for demo?~~ → Disruption simulator (CLI/API endpoint) injects mock events; MQTT wired up last if time allows
-- [ ] Mock data: how many passengers per scenario?
+- [x] ~~Mock data: how many passengers per scenario?~~ → Scenario 1 (diversion): 30 pax, Scenario 2 (hub disruption): 150 connecting pax
+- [x] ~~Repo structure~~ → Monorepo: `backend/`, `passenger-app/`, `dashboard/`
+- [x] ~~Backend framework~~ → FastAPI (async, native WS, Pydantic, auto OpenAPI)
+- [x] ~~Passenger identification~~ → PNR + last name
+- [x] ~~Backend access during dev~~ → Centralized mock server on Hetzner, frontends work against it
