@@ -1,12 +1,24 @@
-"""In-memory data store with pre-seeded Munich snowstorm scenario."""
+"""Async CRUD store backed by SQLAlchemy."""
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
+from uuid import uuid4
 
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from app.db.tables import (
+    DisruptionPassengerRow,
+    DisruptionRow,
+    OptionRow,
+    PassengerRow,
+    SegmentRow,
+    WishRow,
+)
 from app.models import (
     AltAirportDetails,
     Disruption,
     DisruptionType,
-    GroundMode,
     GroundTransportDetails,
     HotelDetails,
     Option,
@@ -17,152 +29,223 @@ from app.models import (
     Segment,
     TransferMode,
     Wish,
+    WishStatus,
 )
 
-# --- Global stores ---
-disruptions: dict[str, Disruption] = {}
-passengers: dict[str, Passenger] = {}
-options: dict[str, list[Option]] = {}  # keyed by passenger_id
-wishes: dict[str, Wish] = {}
 
+# --- Converters: ORM row -> Pydantic model ---
 
-def _now() -> datetime:
-    return datetime.now(tz=UTC)
-
-
-def seed_munich_snowstorm() -> str:
-    """Seed Scenario 2: Munich snowstorm cancels LH1834 MUC->CDG.
-
-    Returns the disruption ID.
-    """
-    base = _now()
-    departure = base + timedelta(hours=2)
-
-    # Passengers with connecting flights through MUC
-    pax_data = [
-        ("pax-001", "Elena Richter", "BK7291", 5, [
-            Segment(flight_number="LH1834", origin="MUC", destination="CDG",
-                    departure=departure, arrival=departure + timedelta(hours=1, minutes=45)),
-            Segment(flight_number="AF1580", origin="CDG", destination="JFK",
-                    departure=departure + timedelta(hours=4), arrival=departure + timedelta(hours=12)),
-        ]),
-        ("pax-002", "Marco Bianchi", "BK4503", 3, [
-            Segment(flight_number="LH1834", origin="MUC", destination="CDG",
-                    departure=departure, arrival=departure + timedelta(hours=1, minutes=45)),
-        ]),
-        ("pax-003", "Yuki Tanaka", "BK8817", 4, [
-            Segment(flight_number="LH1834", origin="MUC", destination="CDG",
-                    departure=departure, arrival=departure + timedelta(hours=1, minutes=45)),
-            Segment(flight_number="AF990", origin="CDG", destination="NRT",
-                    departure=departure + timedelta(hours=5), arrival=departure + timedelta(hours=17)),
-        ]),
-        ("pax-004", "Sarah Hoffmann", "BK2156", 2, [
-            Segment(flight_number="LH1834", origin="MUC", destination="CDG",
-                    departure=departure, arrival=departure + timedelta(hours=1, minutes=45)),
-        ]),
-        ("pax-005", "James O'Connor", "BK6734", 1, [
-            Segment(flight_number="LH1834", origin="MUC", destination="CDG",
-                    departure=departure, arrival=departure + timedelta(hours=1, minutes=45)),
-            Segment(flight_number="AF1280", origin="CDG", destination="LAX",
-                    departure=departure + timedelta(hours=6), arrival=departure + timedelta(hours=18)),
-        ]),
-    ]
-
-    passenger_ids = []
-    for pid, name, bref, priority, itinerary in pax_data:
-        pax = Passenger(
-            id=pid, name=name, booking_ref=bref,
-            original_itinerary=itinerary,
-            status=PassengerStatus.NOTIFIED, priority=priority,
-        )
-        passengers[pid] = pax
-        passenger_ids.append(pid)
-
-    disruption = Disruption(
-        id="dis-001",
-        type=DisruptionType.CANCELLATION,
-        flight_number="LH1834",
-        origin="MUC",
-        destination="CDG",
-        reason="Heavy snowstorm in Munich — runway closures",
-        explanation="Due to severe weather conditions at Munich Airport, flight LH1834 to Paris CDG has been cancelled. All runways are currently closed with expected reopening in 6-8 hours.",
-        detected_at=base,
-        affected_passenger_ids=passenger_ids,
+def _row_to_disruption(row: DisruptionRow) -> Disruption:
+    return Disruption(
+        id=row.id,
+        type=DisruptionType(row.type),
+        flight_number=row.flight_number,
+        origin=row.origin,
+        destination=row.destination,
+        reason=row.reason,
+        explanation=row.explanation,
+        detected_at=row.detected_at,
+        affected_passenger_ids=[dp.passenger_id for dp in row.passengers],
     )
-    disruptions[disruption.id] = disruption
-
-    # Build options per passenger
-    next_day = base + timedelta(days=1)
-
-    for pid in passenger_ids:
-        pax_options = [
-            Option(
-                id=f"opt-{pid}-rebook",
-                type=OptionType.REBOOK,
-                summary="Next available flight LH1836 tomorrow morning",
-                description="Rebook to LH1836 departing MUC 07:15 tomorrow, arriving CDG 09:00.",
-                details=RebookDetails(
-                    flight_number="LH1836",
-                    origin="MUC", destination="CDG",
-                    departure=next_day.replace(hour=7, minute=15),
-                    seat_available=True,
-                ),
-                available=True,
-                estimated_arrival=next_day.replace(hour=9, minute=0),
-            ),
-            Option(
-                id=f"opt-{pid}-hotel",
-                type=OptionType.HOTEL,
-                summary="Overnight at Hilton Munich Airport",
-                description="Complimentary stay at Hilton Munich Airport with breakfast. Next flight LH1836 at 07:15.",
-                details=HotelDetails(
-                    hotel_name="Hilton Munich Airport",
-                    address="Terminalstr. Mitte 20, 85356 Munich Airport",
-                    location={"lat": 48.3537, "lng": 11.7750},
-                    next_flight_number="LH1836",
-                    next_flight_departure=next_day.replace(hour=7, minute=15),
-                ),
-                available=True,
-                estimated_arrival=next_day.replace(hour=9, minute=0),
-            ),
-            Option(
-                id=f"opt-{pid}-ground",
-                type=OptionType.GROUND,
-                summary="ICE train Munich Hbf to Paris Gare de l'Est",
-                description="High-speed train via Stuttgart and Strasbourg. Departs Munich Hbf at 14:30 today.",
-                details=GroundTransportDetails(
-                    mode=GroundMode.TRAIN,
-                    route="Munich Hbf → Stuttgart → Strasbourg → Paris Gare de l'Est",
-                    departure=base + timedelta(hours=3),
-                    arrival=base + timedelta(hours=9),
-                    provider="Deutsche Bahn / SNCF",
-                ),
-                available=True,
-                estimated_arrival=base + timedelta(hours=9),
-            ),
-            Option(
-                id=f"opt-{pid}-alt",
-                type=OptionType.ALT_AIRPORT,
-                summary="Fly via Frankfurt (FRA) to Paris",
-                description="Train to Nuremberg, then LH978 NUE→FRA, then LH1052 FRA→CDG.",
-                details=AltAirportDetails(
-                    via_airport="FRA",
-                    connecting_flight="LH1052",
-                    transfer_mode=TransferMode.TRAIN,
-                    total_arrival=base + timedelta(hours=8),
-                ),
-                available=True,
-                estimated_arrival=base + timedelta(hours=8),
-            ),
-        ]
-        options[pid] = pax_options
-
-    return disruption.id
 
 
-def reset() -> None:
-    """Clear all stores."""
-    disruptions.clear()
-    passengers.clear()
-    options.clear()
-    wishes.clear()
+def _row_to_passenger(row: PassengerRow) -> Passenger:
+    return Passenger(
+        id=row.id,
+        name=row.name,
+        booking_ref=row.booking_ref,
+        original_itinerary=[
+            Segment(
+                flight_number=s.flight_number,
+                origin=s.origin,
+                destination=s.destination,
+                departure=s.departure,
+                arrival=s.arrival,
+            )
+            for s in sorted(row.segments, key=lambda s: s.position)
+        ],
+        status=PassengerStatus(row.status),
+        denial_count=row.denial_count,
+        priority=row.priority,
+    )
+
+
+def _details_from_json(opt_type: str, data: dict):
+    match opt_type:
+        case "rebook":
+            return RebookDetails(**data)
+        case "hotel":
+            return HotelDetails(**data)
+        case "ground":
+            return GroundTransportDetails(**data)
+        case "alt_airport":
+            return AltAirportDetails(**data)
+        case _:
+            return data
+
+
+def _row_to_option(row: OptionRow) -> Option:
+    return Option(
+        id=row.id,
+        type=OptionType(row.type),
+        summary=row.summary,
+        description=row.description,
+        details=_details_from_json(row.type, row.details_json),
+        available=row.available,
+        estimated_arrival=row.estimated_arrival,
+    )
+
+
+def _row_to_wish(row: WishRow) -> Wish:
+    return Wish(
+        id=row.id,
+        passenger_id=row.passenger_id,
+        disruption_id=row.disruption_id,
+        selected_option_id=row.selected_option_id,
+        ranked_option_ids=row.ranked_option_ids_json or [],
+        submitted_at=row.submitted_at,
+        status=WishStatus(row.status),
+        denial_reason=row.denial_reason,
+        confirmation_details=row.confirmation_details,
+    )
+
+
+# --- Query functions ---
+
+async def get_disruption(session: AsyncSession, disruption_id: str) -> Disruption | None:
+    stmt = (
+        select(DisruptionRow)
+        .where(DisruptionRow.id == disruption_id)
+        .options(selectinload(DisruptionRow.passengers))
+    )
+    row = (await session.execute(stmt)).scalar_one_or_none()
+    return _row_to_disruption(row) if row else None
+
+
+async def get_disruption_passengers(
+    session: AsyncSession, disruption_id: str,
+) -> list[Passenger]:
+    stmt = (
+        select(PassengerRow)
+        .join(DisruptionPassengerRow)
+        .where(DisruptionPassengerRow.disruption_id == disruption_id)
+        .options(selectinload(PassengerRow.segments))
+    )
+    rows = (await session.execute(stmt)).scalars().all()
+    pax = [_row_to_passenger(r) for r in rows]
+    pax.sort(key=lambda p: (-p.priority, p.name))
+    return pax
+
+
+async def get_passenger(session: AsyncSession, passenger_id: str) -> Passenger | None:
+    stmt = (
+        select(PassengerRow)
+        .where(PassengerRow.id == passenger_id)
+        .options(selectinload(PassengerRow.segments))
+    )
+    row = (await session.execute(stmt)).scalar_one_or_none()
+    return _row_to_passenger(row) if row else None
+
+
+async def get_passenger_options(
+    session: AsyncSession, passenger_id: str,
+) -> list[Option]:
+    stmt = select(OptionRow).where(OptionRow.passenger_id == passenger_id)
+    rows = (await session.execute(stmt)).scalars().all()
+    return [_row_to_option(r) for r in rows]
+
+
+async def get_passenger_disruptions(
+    session: AsyncSession, passenger_id: str,
+) -> list[Disruption]:
+    stmt = (
+        select(DisruptionRow)
+        .join(DisruptionPassengerRow)
+        .where(DisruptionPassengerRow.passenger_id == passenger_id)
+        .options(selectinload(DisruptionRow.passengers))
+    )
+    rows = (await session.execute(stmt)).scalars().all()
+    return [_row_to_disruption(r) for r in rows]
+
+
+async def create_wish(
+    session: AsyncSession,
+    *,
+    passenger_id: str,
+    disruption_id: str,
+    selected_option_id: str,
+    ranked_option_ids: list[str],
+) -> Wish:
+    wish_id = uuid4().hex[:8]
+    row = WishRow(
+        id=wish_id,
+        passenger_id=passenger_id,
+        disruption_id=disruption_id,
+        selected_option_id=selected_option_id,
+        ranked_option_ids_json=ranked_option_ids,
+        submitted_at=datetime.now(tz=UTC),
+        status="pending",
+    )
+    session.add(row)
+
+    # Update passenger status
+    pax = await session.get(PassengerRow, passenger_id)
+    if pax:
+        pax.status = "chose"
+
+    await session.commit()
+    return _row_to_wish(row)
+
+
+async def get_wish(session: AsyncSession, wish_id: str) -> Wish | None:
+    row = await session.get(WishRow, wish_id)
+    return _row_to_wish(row) if row else None
+
+
+async def approve_wish(session: AsyncSession, wish_id: str) -> Wish | None:
+    row = await session.get(WishRow, wish_id)
+    if not row:
+        return None
+    row.status = "approved"
+    row.confirmation_details = "Approved by gate agent"
+
+    pax = await session.get(PassengerRow, row.passenger_id)
+    if pax:
+        pax.status = "approved"
+
+    await session.commit()
+    return _row_to_wish(row)
+
+
+async def deny_wish(
+    session: AsyncSession, wish_id: str, reason: str,
+) -> Wish | None:
+    row = await session.get(WishRow, wish_id)
+    if not row:
+        return None
+    row.status = "denied"
+    row.denial_reason = reason
+
+    pax = await session.get(PassengerRow, row.passenger_id)
+    if pax:
+        pax.status = "denied"
+        pax.denial_count += 1
+
+    await session.commit()
+    return _row_to_wish(row)
+
+
+async def list_wishes(
+    session: AsyncSession, disruption_id: str | None = None,
+) -> list[Wish]:
+    stmt = select(WishRow)
+    if disruption_id:
+        stmt = stmt.where(WishRow.disruption_id == disruption_id)
+    rows = (await session.execute(stmt)).scalars().all()
+    return [_row_to_wish(r) for r in rows]
+
+
+async def is_empty(session: AsyncSession) -> bool:
+    stmt = select(DisruptionRow.id).limit(1)
+    result = (await session.execute(stmt)).scalar_one_or_none()
+    return result is None

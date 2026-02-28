@@ -72,6 +72,22 @@ if ! command -v caddy &>/dev/null; then
 fi
 caddy version
 
+# --- Postgres (Docker container) ---
+echo "==> Setting up Postgres"
+if ! docker ps --format '{{.Names}}' | grep -q softlanding-pg; then
+  docker run -d --name softlanding-pg \
+    --restart unless-stopped \
+    -e POSTGRES_DB=softlanding \
+    -e POSTGRES_USER=softlanding \
+    -e POSTGRES_PASSWORD=softlanding \
+    -p 127.0.0.1:5432:5432 \
+    -v pgdata:/var/lib/postgresql/data \
+    postgres:17
+  echo "    Postgres container started"
+else
+  echo "    Postgres container already running"
+fi
+
 # --- App directories ---
 echo "==> Creating app directories"
 mkdir -p /opt/softlanding/{backend,dashboard,passenger-app}

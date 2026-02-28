@@ -3,17 +3,24 @@
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 
-from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import store
+from app.db.engine import async_session, get_session, init_db
 from app.models import DenyRequest, SimulateRequest, Wish, WishRequest, WishStatus
+from app.seeds import scenario_snowstorm
 from app.ws import manager
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    store.seed_munich_snowstorm()
+    await init_db()
+    # Auto-seed snowstorm scenario if DB is empty
+    async with async_session() as session:
+        if await store.is_empty(session):
+            await scenario_snowstorm.seed(session)
     yield
 
 
@@ -36,59 +43,65 @@ app.add_middleware(
 # --- Disruptions ---
 
 @app.post("/disruptions/simulate")
-async def simulate_disruption(req: SimulateRequest):
-    store.reset()
-    dis_id = store.seed_munich_snowstorm()
-    dis = store.disruptions[dis_id]
+async def simulate_disruption(req: SimulateRequest, session: AsyncSession = Depends(get_session)):
+    from app.db.engine import drop_db
+
+    await drop_db()
+    await init_db()
+
+    async with async_session() as seed_session:
+        if req.scenario == "diversion":
+            from app.seeds import scenario_diversion
+            dis_id = await scenario_diversion.seed(seed_session)
+        else:
+            dis_id = await scenario_snowstorm.seed(seed_session)
+
+    dis = await store.get_disruption(session, dis_id)
+    if not dis:
+        raise HTTPException(500, "Failed to seed scenario")
     return dis.model_dump(by_alias=True, mode="json")
 
 
 @app.get("/disruptions/{disruption_id}")
-async def get_disruption(disruption_id: str):
-    dis = store.disruptions.get(disruption_id)
+async def get_disruption(disruption_id: str, session: AsyncSession = Depends(get_session)):
+    dis = await store.get_disruption(session, disruption_id)
     if not dis:
         raise HTTPException(404, "Disruption not found")
     return dis.model_dump(by_alias=True, mode="json")
 
 
 @app.get("/disruptions/{disruption_id}/passengers")
-async def get_disruption_passengers(disruption_id: str):
-    dis = store.disruptions.get(disruption_id)
+async def get_disruption_passengers(disruption_id: str, session: AsyncSession = Depends(get_session)):
+    dis = await store.get_disruption(session, disruption_id)
     if not dis:
         raise HTTPException(404, "Disruption not found")
-    pax_list = [
-        store.passengers[pid]
-        for pid in dis.affected_passenger_ids
-        if pid in store.passengers
-    ]
-    pax_list.sort(key=lambda p: (-p.priority, p.name))
+    pax_list = await store.get_disruption_passengers(session, disruption_id)
     return [p.model_dump(by_alias=True, mode="json") for p in pax_list]
 
 
 # --- Passengers ---
 
 @app.get("/passengers/{passenger_id}/disruptions")
-async def get_passenger_disruptions(passenger_id: str):
-    if passenger_id not in store.passengers:
+async def get_passenger_disruptions(passenger_id: str, session: AsyncSession = Depends(get_session)):
+    pax = await store.get_passenger(session, passenger_id)
+    if not pax:
         raise HTTPException(404, "Passenger not found")
-    active = [
-        d for d in store.disruptions.values()
-        if passenger_id in d.affected_passenger_ids
-    ]
-    return [d.model_dump(by_alias=True, mode="json") for d in active]
+    disruptions = await store.get_passenger_disruptions(session, passenger_id)
+    return [d.model_dump(by_alias=True, mode="json") for d in disruptions]
 
 
 @app.get("/passengers/{passenger_id}/options")
-async def get_passenger_options(passenger_id: str):
-    if passenger_id not in store.passengers:
+async def get_passenger_options(passenger_id: str, session: AsyncSession = Depends(get_session)):
+    pax = await store.get_passenger(session, passenger_id)
+    if not pax:
         raise HTTPException(404, "Passenger not found")
-    opts = store.options.get(passenger_id, [])
+    opts = await store.get_passenger_options(session, passenger_id)
     return [o.model_dump(by_alias=True, mode="json") for o in opts]
 
 
 @app.get("/passengers/{passenger_id}/status")
-async def get_passenger_status(passenger_id: str):
-    pax = store.passengers.get(passenger_id)
+async def get_passenger_status(passenger_id: str, session: AsyncSession = Depends(get_session)):
+    pax = await store.get_passenger(session, passenger_id)
     if not pax:
         raise HTTPException(404, "Passenger not found")
     return {
@@ -101,38 +114,35 @@ async def get_passenger_status(passenger_id: str):
 
 
 @app.get("/passengers/{passenger_id}/profile")
-async def get_passenger_profile(passenger_id: str):
-    pax = store.passengers.get(passenger_id)
+async def get_passenger_profile(passenger_id: str, session: AsyncSession = Depends(get_session)):
+    pax = await store.get_passenger(session, passenger_id)
     if not pax:
         raise HTTPException(404, "Passenger not found")
-    pax_wishes = [w for w in store.wishes.values() if w.passenger_id == passenger_id]
-    pax_disruptions = [
-        d for d in store.disruptions.values()
-        if passenger_id in d.affected_passenger_ids
-    ]
+    pax_wishes = await store.list_wishes(session)
+    pax_wishes = [w for w in pax_wishes if w.passenger_id == passenger_id]
+    pax_disruptions = await store.get_passenger_disruptions(session, passenger_id)
+    opts = await store.get_passenger_options(session, passenger_id)
     return {
         "passenger": pax.model_dump(by_alias=True, mode="json"),
-        "options": [o.model_dump(by_alias=True, mode="json") for o in store.options.get(passenger_id, [])],
+        "options": [o.model_dump(by_alias=True, mode="json") for o in opts],
         "wishes": [w.model_dump(by_alias=True, mode="json") for w in pax_wishes],
         "disruptions": [d.model_dump(by_alias=True, mode="json") for d in pax_disruptions],
     }
 
 
 @app.post("/passengers/{passenger_id}/wish")
-async def submit_wish(passenger_id: str, req: WishRequest):
-    if passenger_id not in store.passengers:
+async def submit_wish(passenger_id: str, req: WishRequest, session: AsyncSession = Depends(get_session)):
+    pax = await store.get_passenger(session, passenger_id)
+    if not pax:
         raise HTTPException(404, "Passenger not found")
-    pax = store.passengers[passenger_id]
 
-    wish = Wish(
+    wish = await store.create_wish(
+        session,
         passenger_id=passenger_id,
         disruption_id=req.disruption_id,
         selected_option_id=req.selected_option_id,
         ranked_option_ids=req.ranked_option_ids,
-        submitted_at=datetime.now(tz=UTC),
     )
-    store.wishes[wish.id] = wish
-    pax.status = "chose"
 
     await manager.send_to_dashboard(req.disruption_id, "wish_submitted", {
         "wishId": wish.id,
@@ -145,24 +155,16 @@ async def submit_wish(passenger_id: str, req: WishRequest):
 # --- Wishes ---
 
 @app.get("/wishes")
-async def list_wishes(disruption_id: str = Query(None)):
-    result = store.wishes.values()
-    if disruption_id:
-        result = [w for w in result if w.disruption_id == disruption_id]
+async def list_wishes(disruption_id: str = Query(None), session: AsyncSession = Depends(get_session)):
+    result = await store.list_wishes(session, disruption_id=disruption_id)
     return [w.model_dump(by_alias=True, mode="json") for w in result]
 
 
 @app.post("/wishes/{wish_id}/approve")
-async def approve_wish(wish_id: str):
-    wish = store.wishes.get(wish_id)
+async def approve_wish(wish_id: str, session: AsyncSession = Depends(get_session)):
+    wish = await store.approve_wish(session, wish_id)
     if not wish:
         raise HTTPException(404, "Wish not found")
-    wish.status = WishStatus.APPROVED
-    wish.confirmation_details = "Approved by gate agent"
-
-    pax = store.passengers.get(wish.passenger_id)
-    if pax:
-        pax.status = "approved"
 
     await manager.send_to_passenger(wish.passenger_id, "wish_approved", {
         "wishId": wish.id,
@@ -172,17 +174,10 @@ async def approve_wish(wish_id: str):
 
 
 @app.post("/wishes/{wish_id}/deny")
-async def deny_wish(wish_id: str, req: DenyRequest):
-    wish = store.wishes.get(wish_id)
+async def deny_wish(wish_id: str, req: DenyRequest, session: AsyncSession = Depends(get_session)):
+    wish = await store.deny_wish(session, wish_id, req.reason)
     if not wish:
         raise HTTPException(404, "Wish not found")
-    wish.status = WishStatus.DENIED
-    wish.denial_reason = req.reason
-
-    pax = store.passengers.get(wish.passenger_id)
-    if pax:
-        pax.status = "denied"
-        pax.denial_count += 1
 
     await manager.send_to_passenger(wish.passenger_id, "wish_denied", {
         "wishId": wish.id,
