@@ -5,11 +5,31 @@ All notable changes to SoftLanding will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [CalVer](https://calver.org/) versioning (YYYY.0M.MICRO).
 
+## [Unreleased]
+
+### Added
+
+- **backend**: Switch to Postgres with async SQLAlchemy and realistic seed data
+
+### Maintenance
+
+- Add auto-deploy GitHub Action for Hetzner
+
 ## [2026.02.1] - 2026-02-28
+
+### Added
+
+- **dashboard**: Gate agent dashboard with flight overview and manual resolution
+
+### Documentation
+
+- Distill deck to concise overview, fix mermaid errors
+- Update changelog for v2026.02.1
 
 ### Maintenance
 
 - Add VERSION file (CalVer 2026.02.0)
+- Bump version to 2026.02.1
 
 ## [2026.02.0] - 2026-02-28
 
