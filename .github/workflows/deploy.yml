@@ -14,18 +14,13 @@ env:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-
-      - name: Set up QEMU (for ARM cross-compilation)
-        uses: docker/setup-qemu-action@v3
-        with:
-          platforms: linux/arm64
 
       - name: Setup SSH key
         run: |
@@ -39,28 +34,28 @@ jobs:
 
       - name: Build and push backend
         run: |
-          docker buildx build --platform linux/arm64 \
+          docker buildx build \
             -t ${{ env.BACKEND_IMAGE }} \
             --output type=docker,dest=- \
             backend/ | ssh ${{ env.SERVER }} docker load
 
       - name: Build and push dashboard
         run: |
-          docker buildx build --platform linux/arm64 \
+          docker buildx build \
             -t ${{ env.DASHBOARD_IMAGE }} \
             --output type=docker,dest=- \
             dashboard/ | ssh ${{ env.SERVER }} docker load
 
       - name: Build and push docs
         run: |
-          docker buildx build --platform linux/arm64 \
+          docker buildx build \
             -t ${{ env.DOCS_IMAGE }} \
             --output type=docker,dest=- \
             docs/ | ssh ${{ env.SERVER }} docker load
 
       - name: Build and push landing
         run: |
-          docker buildx build --platform linux/arm64 \
+          docker buildx build \
             -t ${{ env.LANDING_IMAGE }} \
             --output type=docker,dest=- \
             landing/ | ssh ${{ env.SERVER }} docker load
