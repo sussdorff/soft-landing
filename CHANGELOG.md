@@ -9,7 +9,22 @@ and this project uses [CalVer](https://calver.org/) versioning (YYYY.0M.MICRO).
 
 ### Added
 
+- **backend,dashboard**: Wire LH API into seed scenarios and add lounge/voucher support
+
+## [2026.02.9] - 2026-02-28
+
+### Added
+
+- **infra**: Consolidate all services into docker-compose
 - **backend**: Add StateManager for priority escalation and cascading impact
+
+### Documentation
+
+- Update changelog
+
+### Maintenance
+
+- Bump version to 2026.02.9
 
 ## [2026.02.8] - 2026-02-28
 
