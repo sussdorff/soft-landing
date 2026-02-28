@@ -9,6 +9,12 @@ and this project uses [CalVer](https://calver.org/) versioning (YYYY.0M.MICRO).
 
 ### Added
 
+- Close 6 dashboard API gaps (list, bulk options, WS handlers, resolve, profile)
+
+## [2026.02.6] - 2026-02-28
+
+### Added
+
 - **infra**: Docker-based CI/CD with GHCR
 
 ### Changed
@@ -18,6 +24,7 @@ and this project uses [CalVer](https://calver.org/) versioning (YYYY.0M.MICRO).
 ### Documentation
 
 - Add dashboard API integration reference
+- Update changelog
 
 ## [2026.02.5] - 2026-02-28
 
