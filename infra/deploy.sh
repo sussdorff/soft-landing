@@ -9,6 +9,8 @@
 #   bash infra/deploy.sh backend      # Deploy backend only
 #   bash infra/deploy.sh dashboard    # Deploy dashboard only
 #   bash infra/deploy.sh app          # Deploy passenger app only
+#   bash infra/deploy.sh docs         # Deploy documentation only
+#   bash infra/deploy.sh landing      # Deploy landing page only
 
 set -euo pipefail
 
@@ -52,18 +54,36 @@ deploy_app() {
   echo "    Passenger app deployed"
 }
 
+deploy_docs() {
+  echo "==> Deploying docs"
+  (cd docs && pip install -r requirements.txt -q && mkdocs build)
+  rsync -avz --delete docs/site/ "softlanding:/opt/softlanding/docs/site/"
+  echo "    Docs deployed"
+}
+
+deploy_landing() {
+  echo "==> Deploying landing page"
+  rsync -avz --delete \
+    landing/ "softlanding:/opt/softlanding/landing/"
+  echo "    Landing page deployed"
+}
+
 case "${COMPONENT}" in
   all)
     deploy_backend
     deploy_dashboard
     deploy_app
+    deploy_docs
+    deploy_landing
     ;;
   backend)  deploy_backend ;;
   dashboard) deploy_dashboard ;;
   app)      deploy_app ;;
+  docs)     deploy_docs ;;
+  landing)  deploy_landing ;;
   *)
     echo "Unknown component: ${COMPONENT}"
-    echo "Usage: $0 [all|backend|dashboard|app]"
+    echo "Usage: $0 [all|backend|dashboard|app|docs|landing]"
     exit 1
     ;;
 esac

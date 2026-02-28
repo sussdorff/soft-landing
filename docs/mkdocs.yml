@@ -1,0 +1,63 @@
+site_name: ReRoute — Soft Landing Docs
+site_description: User guides for the ReRoute disruption management system
+site_url: https://softlanding.sussdorff.de/docs/
+docs_dir: content
+site_dir: site
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: amber
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: amber
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.sections
+    - navigation.expand
+    - content.code.copy
+  icon:
+    logo: material/airplane
+  font:
+    text: Inter
+    code: JetBrains Mono
+
+nav:
+  - Home: index.md
+  - Gate Agent Dashboard:
+      - Overview: gate-agent/overview.md
+      - Disruption Workflow: gate-agent/disruption-workflow.md
+      - Features: gate-agent/features.md
+  - Passenger App:
+      - Overview: passenger-app/overview.md
+      - Disruption Flow: passenger-app/disruption-flow.md
+  - API Reference: api.md
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - attr_list
+  - md_in_html
+  - tables
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - toc:
+      permalink: true
+
+extra:
+  generator: false

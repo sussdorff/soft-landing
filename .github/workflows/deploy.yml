@@ -43,6 +43,13 @@ jobs:
           rsync -avz --delete \
             passenger-app/ root@46.224.137.140:/opt/softlanding/passenger-app/
 
+      - name: Build and deploy docs
+        run: |
+          pip install -r docs/requirements.txt -q
+          mkdocs build -f docs/mkdocs.yml
+          rsync -avz --delete docs/site/ root@46.224.137.140:/opt/softlanding/docs/site/
+
       - name: Verify deployment
         run: |
           curl -sf https://softlanding.sussdorff.de/ || echo "Health check pending"
+          curl -sf https://softlanding.sussdorff.de/docs/ || echo "Docs health check pending"

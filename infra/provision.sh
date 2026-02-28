@@ -90,7 +90,7 @@ fi
 
 # --- App directories ---
 echo "==> Creating app directories"
-mkdir -p /opt/softlanding/{backend,dashboard,passenger-app}
+mkdir -p /opt/softlanding/{backend,dashboard,passenger-app,docs/site}
 
 # --- Caddyfile ---
 echo "==> Writing Caddyfile"
@@ -101,6 +101,14 @@ ${DOMAIN} {
         Access-Control-Allow-Origin *
         Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
         Access-Control-Allow-Headers "Content-Type, Authorization"
+    }
+
+    # User documentation (MkDocs Material)
+    handle /docs* {
+        uri strip_prefix /docs
+        root * /opt/softlanding/docs/site
+        try_files {path} /index.html
+        file_server
     }
 
     # Gate Agent Dashboard (React SPA)
@@ -121,6 +129,11 @@ ${DOMAIN} {
     handle {
         reverse_proxy localhost:8000
     }
+}
+
+get-${DOMAIN} {
+    root * /opt/softlanding/landing
+    file_server
 }
 CADDYFILE
 

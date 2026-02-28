@@ -29,3 +29,6 @@ local.properties
 *.class
 /*/build/
 .kotlin/
+
+# MkDocs build output
+docs/site/
