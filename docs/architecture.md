@@ -31,7 +31,7 @@ graph TB
         PAX["Passenger App<br/>(Kotlin Multiplatform)"]
     end
 
-    LH_OPS -.->|MQTT events (later)| DE
+    LH_OPS -.->|MQTT events - later| DE
     DE -->|disruption context| OG
     LH_SCHED --> OG
     LH_SEATS --> OG
