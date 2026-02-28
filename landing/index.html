@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Soft Landing — Passenger Disruption Management</title>
+  <meta name="description" content="When flights break, Soft Landing gives gate agents an operational command center. 200 disrupted passengers handled in minutes, not hours.">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300..800;1,9..40,300..800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['DM Sans', 'system-ui', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            surface: {
+              900: '#0a0e14',
+              800: '#0f1419',
+              700: '#151b23',
+              600: '#1c2430',
+              500: '#2a3444',
+            },
+            accent: {
+              blue: '#38bdf8',
+              green: '#4ade80',
+              amber: '#fbbf24',
+              red: '#f87171',
+            },
+          },
+        },
+      },
+    }
+  </script>
+  <style>
+    html { scroll-behavior: smooth; }
+    .hero-bg {
+      background-image: linear-gradient(to bottom, rgba(10,14,20,0.4), rgba(10,14,20,0.95)), url('images/hero.png');
+      background-size: cover;
+      background-position: center;
+    }
+    .screenshot {
+      border: 1px solid rgba(56, 189, 248, 0.15);
+      border-radius: 12px;
+      box-shadow: 0 25px 80px -12px rgba(56, 189, 248, 0.15), 0 0 0 1px rgba(255,255,255,0.05);
+    }
+    .glow { box-shadow: 0 0 40px rgba(56, 189, 248, 0.1); }
+    .stat-card { backdrop-filter: blur(12px); }
+    @keyframes float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+    .float { animation: float 6s ease-in-out infinite; }
+    .flow-arrow { color: #38bdf8; }
+  </style>
+</head>
+<body class="bg-surface-900 text-gray-200 antialiased font-sans">
+
+  <!-- Nav -->
+  <nav class="fixed top-0 inset-x-0 z-50 bg-surface-900/80 backdrop-blur-lg border-b border-surface-600">
+    <div class="max-w-6xl mx-auto flex items-center justify-between px-6 py-3">
+      <div class="flex items-center gap-3">
+        <div class="w-2 h-2 rounded-full bg-accent-green animate-pulse"></div>
+        <span class="font-mono text-sm font-semibold tracking-wider uppercase">Soft Landing</span>
+      </div>
+      <div class="hidden md:flex items-center gap-8 text-sm text-gray-400">
+        <a href="#problem" class="hover:text-white transition-colors">Problem</a>
+        <a href="#solution" class="hover:text-white transition-colors">Solution</a>
+        <a href="#how" class="hover:text-white transition-colors">How It Works</a>
+        <a href="#tech" class="hover:text-white transition-colors">Tech</a>
+        <a href="#demo" class="px-4 py-2 bg-accent-blue/10 text-accent-blue rounded-lg hover:bg-accent-blue/20 transition-colors font-medium">Live Demo</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="hero-bg min-h-screen flex items-center pt-16">
+    <div class="max-w-6xl mx-auto px-6 py-24 md:py-32">
+      <div class="max-w-3xl">
+        <div class="inline-flex items-center gap-2 px-3 py-1.5 bg-surface-700/60 rounded-full text-xs font-mono text-gray-400 mb-8 backdrop-blur">
+          <span class="w-1.5 h-1.5 rounded-full bg-accent-amber"></span>
+          Innovate the Skies &amp; Beyond — Lufthansa + Google Hackathon 2026
+        </div>
+        <h1 class="text-4xl md:text-6xl font-bold text-white leading-tight mb-6">
+          A single gate agent.<br>
+          <span class="text-accent-blue">200 passengers.</span><br>
+          Minutes, not hours.
+        </h1>
+        <p class="text-lg md:text-xl text-gray-400 leading-relaxed mb-10 max-w-2xl">
+          When flights break, passengers crowd the desk and agents drown in manual rebooking.
+          Soft Landing gives the gate agent an <strong class="text-gray-200">operational command center</strong>
+          that surfaces every affected passenger, their preferences, and the cascading impact of each decision — in real time.
+        </p>
+        <div class="flex flex-wrap gap-4">
+          <a href="#demo" class="px-6 py-3 bg-accent-blue text-surface-900 font-semibold rounded-lg hover:bg-accent-blue/90 transition-colors">
+            Try the Live Demo
+          </a>
+          <a href="#how" class="px-6 py-3 border border-surface-500 text-gray-300 rounded-lg hover:border-gray-400 hover:text-white transition-colors">
+            See How It Works
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Problem -->
+  <section id="problem" class="py-24 md:py-32">
+    <div class="max-w-6xl mx-auto px-6">
+      <div class="text-center mb-16">
+        <p class="font-mono text-xs text-accent-red uppercase tracking-widest mb-3">The Problem</p>
+        <h2 class="text-3xl md:text-4xl font-bold text-white mb-4">Flight disruptions are an operational nightmare</h2>
+        <p class="text-gray-400 max-w-2xl mx-auto">
+          Airlines handle millions of disrupted passengers each year. The current process is sequential, manual, and blind to cascading impact.
+        </p>
+      </div>
+
+      <div class="grid md:grid-cols-3 gap-6">
+        <div class="bg-surface-800 border border-surface-600 rounded-xl p-6">
+          <div class="text-3xl font-bold font-mono text-accent-red mb-2">1-at-a-time</div>
+          <div class="text-sm text-gray-400">
+            Gate agents process passengers individually while 200 others wait in line. No way to see the full picture or batch decisions.
+          </div>
+        </div>
+        <div class="bg-surface-800 border border-surface-600 rounded-xl p-6">
+          <div class="text-3xl font-bold font-mono text-accent-amber mb-2">Zero visibility</div>
+          <div class="text-sm text-gray-400">
+            Approve a seat — but it was the last option for three other passengers. No cascading impact awareness until it's too late.
+          </div>
+        </div>
+        <div class="bg-surface-800 border border-surface-600 rounded-xl p-6">
+          <div class="text-3xl font-bold font-mono text-accent-blue mb-2">Denied &rarr; back of line</div>
+          <div class="text-sm text-gray-400">
+            Passengers denied once go to the back and start over. No priority escalation, no learning from previous attempts.
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Solution -->
+  <section id="solution" class="py-24 md:py-32 bg-surface-800/50">
+    <div class="max-w-6xl mx-auto px-6">
+      <div class="text-center mb-16">
+        <p class="font-mono text-xs text-accent-green uppercase tracking-widest mb-3">The Solution</p>
+        <h2 class="text-3xl md:text-4xl font-bold text-white mb-4">Two apps, one system</h2>
+        <p class="text-gray-400 max-w-2xl mx-auto">
+          Passengers self-serve through a companion app. Their preferences stream directly into the gate agent's command center. The agent stays in control — human-in-the-loop for every decision.
+        </p>
+      </div>
+
+      <div class="grid md:grid-cols-2 gap-12 items-start">
+        <!-- Gate Agent Dashboard -->
+        <div>
+          <div class="flex items-center gap-3 mb-4">
+            <span class="px-2.5 py-1 bg-accent-blue/10 text-accent-blue text-xs font-mono rounded-md uppercase font-semibold">Primary Product</span>
+          </div>
+          <h3 class="text-2xl font-bold text-white mb-3">Gate Agent Dashboard</h3>
+          <p class="text-gray-400 mb-6">
+            Real-time operational command center. See all affected passengers, their wishes streaming in live, approve or deny with one click — and instantly see the cascading impact on everyone else.
+          </p>
+          <ul class="space-y-3 text-sm text-gray-400 mb-8">
+            <li class="flex items-start gap-2"><span class="text-accent-green mt-0.5">&#10003;</span> At-a-glance disruption overview with live stats</li>
+            <li class="flex items-start gap-2"><span class="text-accent-green mt-0.5">&#10003;</span> Real-time wish stream sorted by priority</li>
+            <li class="flex items-start gap-2"><span class="text-accent-green mt-0.5">&#10003;</span> One-click approve/deny with cascading impact preview</li>
+            <li class="flex items-start gap-2"><span class="text-accent-green mt-0.5">&#10003;</span> Priority escalation — denied passengers bubble up, never fall behind</li>
+          </ul>
+          <a href="#demo" class="inline-flex items-center gap-2 text-accent-blue text-sm font-medium hover:underline">
+            Open Dashboard Demo &rarr;
+          </a>
+        </div>
+
+        <!-- Passenger App -->
+        <div>
+          <div class="flex items-center gap-3 mb-4">
+            <span class="px-2.5 py-1 bg-accent-amber/10 text-accent-amber text-xs font-mono rounded-md uppercase font-semibold">Data Collection</span>
+          </div>
+          <h3 class="text-2xl font-bold text-white mb-3">Passenger App</h3>
+          <p class="text-gray-400 mb-6">
+            Passengers receive a plain-language explanation of what happened and why. Then they choose from AI-generated options — rebook, hotel, train, alternative airport. Their choice is a wish, not a booking. The gate agent has final say.
+          </p>
+          <ul class="space-y-3 text-sm text-gray-400 mb-8">
+            <li class="flex items-start gap-2"><span class="text-accent-green mt-0.5">&#10003;</span> Plain-language disruption explanation (Gemini-powered)</li>
+            <li class="flex items-start gap-2"><span class="text-accent-green mt-0.5">&#10003;</span> 3-4 concrete options with real data (flights, hotels, trains)</li>
+            <li class="flex items-start gap-2"><span class="text-accent-green mt-0.5">&#10003;</span> Ranked preference submission</li>
+            <li class="flex items-start gap-2"><span class="text-accent-green mt-0.5">&#10003;</span> Real-time status updates on approval/denial</li>
+          </ul>
+          <a href="#demo" class="inline-flex items-center gap-2 text-accent-blue text-sm font-medium hover:underline">
+            Open Passenger App Demo &rarr;
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Screenshots -->
+  <section class="py-24 md:py-32">
+    <div class="max-w-6xl mx-auto px-6">
+      <div class="text-center mb-12">
+        <p class="font-mono text-xs text-accent-blue uppercase tracking-widest mb-3">Built &amp; Running</p>
+        <h2 class="text-3xl md:text-4xl font-bold text-white">This is not a mockup</h2>
+      </div>
+
+      <div class="space-y-16">
+        <!-- Dashboard Overview -->
+        <div>
+          <div class="flex items-center gap-3 mb-4">
+            <div class="w-3 h-3 rounded-full bg-accent-red"></div>
+            <div class="w-3 h-3 rounded-full bg-accent-amber"></div>
+            <div class="w-3 h-3 rounded-full bg-accent-green"></div>
+            <span class="font-mono text-xs text-gray-500 ml-2">Gate Agent Dashboard — Flight Overview</span>
+          </div>
+          <img src="images/dashboard-overview.png" alt="Soft Landing Gate Agent Dashboard showing flight overview with affected passengers, connection risks, and status indicators" class="screenshot w-full" loading="lazy">
+        </div>
+
+        <!-- Wish Stream -->
+        <div>
+          <div class="flex items-center gap-3 mb-4">
+            <div class="w-3 h-3 rounded-full bg-accent-red"></div>
+            <div class="w-3 h-3 rounded-full bg-accent-amber"></div>
+            <div class="w-3 h-3 rounded-full bg-accent-green"></div>
+            <span class="font-mono text-xs text-gray-500 ml-2">Gate Agent Dashboard — Live Wish Stream</span>
+          </div>
+          <img src="images/dashboard-wishes.png" alt="Soft Landing Wish Stream showing real-time passenger preferences with approve and deny actions" class="screenshot w-full" loading="lazy">
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- How It Works -->
+  <section id="how" class="py-24 md:py-32 bg-surface-800/50">
+    <div class="max-w-6xl mx-auto px-6">
+      <div class="text-center mb-16">
+        <p class="font-mono text-xs text-accent-blue uppercase tracking-widest mb-3">How It Works</p>
+        <h2 class="text-3xl md:text-4xl font-bold text-white mb-4">From disruption to resolution in minutes</h2>
+      </div>
+
+      <div class="grid md:grid-cols-5 gap-4 items-start">
+        <!-- Step 1 -->
+        <div class="text-center">
+          <div class="w-12 h-12 bg-accent-red/10 text-accent-red rounded-xl flex items-center justify-center mx-auto mb-4 text-lg font-bold font-mono">1</div>
+          <h4 class="font-semibold text-white text-sm mb-2">Disruption Detected</h4>
+          <p class="text-xs text-gray-500">Flight cancellation, delay, or diversion triggers the system</p>
+        </div>
+
+        <div class="hidden md:flex items-center justify-center pt-6"><span class="flow-arrow text-2xl">&rarr;</span></div>
+
+        <!-- Step 2 -->
+        <div class="text-center">
+          <div class="w-12 h-12 bg-accent-amber/10 text-accent-amber rounded-xl flex items-center justify-center mx-auto mb-4 text-lg font-bold font-mono">2</div>
+          <h4 class="font-semibold text-white text-sm mb-2">Options Generated</h4>
+          <p class="text-xs text-gray-500">AI builds personalized alternatives per passenger using live data</p>
+        </div>
+
+        <div class="hidden md:flex items-center justify-center pt-6"><span class="flow-arrow text-2xl">&rarr;</span></div>
+
+        <!-- Step 3 -->
+        <div class="text-center">
+          <div class="w-12 h-12 bg-accent-blue/10 text-accent-blue rounded-xl flex items-center justify-center mx-auto mb-4 text-lg font-bold font-mono">3</div>
+          <h4 class="font-semibold text-white text-sm mb-2">Passengers Choose</h4>
+          <p class="text-xs text-gray-500">Ranked preferences submitted as wishes — not bookings</p>
+        </div>
+      </div>
+
+      <div class="grid md:grid-cols-5 gap-4 items-start mt-8 md:mt-12">
+        <div class="md:col-start-1 text-center">
+          <div class="w-12 h-12 bg-accent-green/10 text-accent-green rounded-xl flex items-center justify-center mx-auto mb-4 text-lg font-bold font-mono">4</div>
+          <h4 class="font-semibold text-white text-sm mb-2">Agent Approves</h4>
+          <p class="text-xs text-gray-500">One-click approval with cascading impact visibility</p>
+        </div>
+
+        <div class="hidden md:flex items-center justify-center pt-6"><span class="flow-arrow text-2xl">&rarr;</span></div>
+
+        <div class="text-center">
+          <div class="w-12 h-12 bg-accent-green/10 text-accent-green rounded-xl flex items-center justify-center mx-auto mb-4 text-lg font-bold font-mono">5</div>
+          <h4 class="font-semibold text-white text-sm mb-2">Resolved</h4>
+          <p class="text-xs text-gray-500">Passenger gets confirmation and clear next steps instantly</p>
+        </div>
+
+        <div class="hidden md:flex items-center justify-center pt-6"></div>
+
+        <div class="text-center">
+          <div class="w-12 h-12 bg-surface-700 text-gray-400 rounded-xl flex items-center justify-center mx-auto mb-4 text-xs font-mono">or</div>
+          <h4 class="font-semibold text-white text-sm mb-2">Denied? Priority Up</h4>
+          <p class="text-xs text-gray-500">Denied passengers get escalated priority — never sent to the back of the line</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Tech Stack -->
+  <section id="tech" class="py-24 md:py-32">
+    <div class="max-w-6xl mx-auto px-6">
+      <div class="text-center mb-16">
+        <p class="font-mono text-xs text-accent-blue uppercase tracking-widest mb-3">Technology</p>
+        <h2 class="text-3xl md:text-4xl font-bold text-white mb-4">Built for operations, powered by Gemini</h2>
+      </div>
+
+      <!-- Architecture -->
+      <div class="bg-surface-800 border border-surface-600 rounded-xl p-8 mb-12">
+        <div class="grid md:grid-cols-3 gap-8">
+          <!-- Backend -->
+          <div>
+            <div class="flex items-center gap-2 mb-4">
+              <div class="w-8 h-8 bg-accent-green/10 text-accent-green rounded-lg flex items-center justify-center text-sm font-mono font-bold">B</div>
+              <h4 class="font-semibold text-white">Backend</h4>
+            </div>
+            <p class="text-sm text-gray-400 mb-4">Python 3.14 + FastAPI — the brain that connects everything.</p>
+            <div class="space-y-2 text-xs font-mono text-gray-500">
+              <div class="flex items-center gap-2"><span class="text-accent-green">&#9679;</span> Disruption Engine — detect &amp; classify</div>
+              <div class="flex items-center gap-2"><span class="text-accent-green">&#9679;</span> Option Generator — 4 resolution strategies</div>
+              <div class="flex items-center gap-2"><span class="text-accent-green">&#9679;</span> State Manager — wishes, priority, conflicts</div>
+              <div class="flex items-center gap-2"><span class="text-accent-green">&#9679;</span> WebSocket — real-time to both clients</div>
+            </div>
+          </div>
+
+          <!-- Dashboard -->
+          <div>
+            <div class="flex items-center gap-2 mb-4">
+              <div class="w-8 h-8 bg-accent-blue/10 text-accent-blue rounded-lg flex items-center justify-center text-sm font-mono font-bold">D</div>
+              <h4 class="font-semibold text-white">Dashboard</h4>
+            </div>
+            <p class="text-sm text-gray-400 mb-4">React + TypeScript — the primary product for gate agents.</p>
+            <div class="space-y-2 text-xs font-mono text-gray-500">
+              <div class="flex items-center gap-2"><span class="text-accent-blue">&#9679;</span> WebSocket real-time updates</div>
+              <div class="flex items-center gap-2"><span class="text-accent-blue">&#9679;</span> Ops-center dark theme</div>
+              <div class="flex items-center gap-2"><span class="text-accent-blue">&#9679;</span> Cascading impact preview</div>
+              <div class="flex items-center gap-2"><span class="text-accent-blue">&#9679;</span> Priority queue visualization</div>
+            </div>
+          </div>
+
+          <!-- Passenger App -->
+          <div>
+            <div class="flex items-center gap-2 mb-4">
+              <div class="w-8 h-8 bg-accent-amber/10 text-accent-amber rounded-lg flex items-center justify-center text-sm font-mono font-bold">P</div>
+              <h4 class="font-semibold text-white">Passenger App</h4>
+            </div>
+            <p class="text-sm text-gray-400 mb-4">Kotlin Multiplatform — Android, iOS, and Web from one codebase.</p>
+            <div class="space-y-2 text-xs font-mono text-gray-500">
+              <div class="flex items-center gap-2"><span class="text-accent-amber">&#9679;</span> Native binaries (not Flutter runtime)</div>
+              <div class="flex items-center gap-2"><span class="text-accent-amber">&#9679;</span> Compose Multiplatform UI</div>
+              <div class="flex items-center gap-2"><span class="text-accent-amber">&#9679;</span> Swift interop on iOS</div>
+              <div class="flex items-center gap-2"><span class="text-accent-amber">&#9679;</span> WebSocket + REST</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- API + Grounding -->
+      <div class="grid md:grid-cols-2 gap-6">
+        <div class="bg-surface-800 border border-surface-600 rounded-xl p-6">
+          <h4 class="font-semibold text-white mb-4">Lufthansa Flight Ops API</h4>
+          <div class="space-y-2 text-sm text-gray-400">
+            <div>Flight status + disruption events (MQTT push)</div>
+            <div>Schedules — alternative flight search</div>
+            <div>Seat Maps — real availability on alternatives</div>
+            <div>Reference Data — airport coordinates + distances</div>
+          </div>
+        </div>
+        <div class="bg-surface-800 border border-surface-600 rounded-xl p-6">
+          <h4 class="font-semibold text-white mb-4">Gemini 3.0 + Grounding</h4>
+          <div class="space-y-2 text-sm text-gray-400">
+            <div><span class="text-accent-blue">Google Search</span> — weather, NOTAM, disruption context</div>
+            <div><span class="text-accent-blue">Google Maps</span> — hotels, transit, ground routes</div>
+            <div>Plain-language explanations with citations</div>
+            <div>Personalized option generation per passenger</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- API Docs Screenshot -->
+      <div class="mt-12">
+        <div class="flex items-center gap-3 mb-4">
+          <div class="w-3 h-3 rounded-full bg-accent-red"></div>
+          <div class="w-3 h-3 rounded-full bg-accent-amber"></div>
+          <div class="w-3 h-3 rounded-full bg-accent-green"></div>
+          <span class="font-mono text-xs text-gray-500 ml-2">ReRoute API — OpenAPI 3.1 (Swagger UI)</span>
+        </div>
+        <img src="images/api-docs.png" alt="ReRoute API documentation showing all REST endpoints" class="screenshot w-full" loading="lazy">
+      </div>
+    </div>
+  </section>
+
+  <!-- Demo CTAs -->
+  <section id="demo" class="py-24 md:py-32 bg-surface-800/50">
+    <div class="max-w-6xl mx-auto px-6">
+      <div class="text-center mb-12">
+        <p class="font-mono text-xs text-accent-green uppercase tracking-widest mb-3">Live Demo</p>
+        <h2 class="text-3xl md:text-4xl font-bold text-white mb-4">Try it yourself</h2>
+        <p class="text-gray-400 max-w-xl mx-auto">
+          Everything is deployed and running. Open the gate agent dashboard to see the operational view, or open the passenger app to experience the passenger side.
+        </p>
+      </div>
+
+      <div class="grid md:grid-cols-2 gap-6 max-w-3xl mx-auto">
+        <a href="https://softlanding.sussdorff.de/dashboard/" class="group bg-surface-800 border border-surface-600 rounded-xl p-8 text-center hover:border-accent-blue/40 transition-all hover:glow">
+          <div class="w-16 h-16 bg-accent-blue/10 text-accent-blue rounded-2xl flex items-center justify-center mx-auto mb-4 text-2xl group-hover:scale-110 transition-transform">
+            &#9783;
+          </div>
+          <h3 class="text-xl font-bold text-white mb-2">Gate Agent Dashboard</h3>
+          <p class="text-sm text-gray-500 mb-4">React + WebSocket real-time ops center</p>
+          <span class="text-accent-blue text-sm font-medium">Open Dashboard &rarr;</span>
+        </a>
+        <a href="https://softlanding.sussdorff.de/app/" class="group bg-surface-800 border border-surface-600 rounded-xl p-8 text-center hover:border-accent-amber/40 transition-all">
+          <div class="w-16 h-16 bg-accent-amber/10 text-accent-amber rounded-2xl flex items-center justify-center mx-auto mb-4 text-2xl group-hover:scale-110 transition-transform">
+            &#9992;
+          </div>
+          <h3 class="text-xl font-bold text-white mb-2">Passenger App</h3>
+          <p class="text-sm text-gray-500 mb-4">Kotlin Multiplatform (Web target)</p>
+          <span class="text-accent-amber text-sm font-medium">Open App &rarr;</span>
+        </a>
+      </div>
+
+      <div class="text-center mt-8">
+        <a href="https://softlanding.sussdorff.de/api/docs" class="text-sm text-gray-500 hover:text-gray-300 transition-colors font-mono">
+          API Docs (Swagger UI) &rarr;
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="py-12 border-t border-surface-600">
+    <div class="max-w-6xl mx-auto px-6 text-center">
+      <div class="flex items-center justify-center gap-3 mb-4">
+        <div class="w-2 h-2 rounded-full bg-accent-green animate-pulse"></div>
+        <span class="font-mono text-sm font-semibold tracking-wider uppercase text-white">Soft Landing</span>
+      </div>
+      <p class="text-sm text-gray-500 mb-2">
+        Built for <em>Innovate the Skies &amp; Beyond</em> — Lufthansa + Google Hackathon 2026
+      </p>
+      <p class="text-xs text-gray-600 font-mono">
+        Python &middot; FastAPI &middot; React &middot; KMP &middot; Gemini 3.0 &middot; WebSockets
+      </p>
+    </div>
+  </footer>
+
+</body>
+</html>
