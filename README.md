@@ -248,3 +248,31 @@ System generates options per passenger
 - [x] ~~Backend framework~~ → FastAPI (async, native WS, Pydantic, auto OpenAPI)
 - [x] ~~Passenger identification~~ → PNR + last name
 - [x] ~~Backend access during dev~~ → Centralized mock server on Hetzner, frontends work against it
+
+---
+
+## Infrastructure
+
+**Server:** Hetzner cax11 (ARM, 2C/4GB) — Ubuntu 24.04, Falkenstein
+**URL:** https://softlanding.sussdorff.de
+**SSH:** `ssh softlanding`
+
+| Route | Target | Purpose |
+|-------|--------|---------|
+| `/api/*` | Python backend (port 8000) | REST API |
+| `/ws/*` | Python backend (port 8000) | WebSocket real-time updates |
+| `/dashboard/*` | Static files | Gate Agent Dashboard (React SPA) |
+| `/app/*` | Static files | Passenger App (KMP web target) |
+
+**Stack on server:** Docker, Node.js 22, Python 3.14 (via uv), Caddy (reverse proxy + auto-TLS via Let's Encrypt). CORS enabled for mobile app access.
+
+### Infrastructure as Code
+
+All scripts in `infra/`:
+
+| Script | Purpose |
+|--------|---------|
+| `setup-server.sh` | Create server, firewall, DNS record via hcloud |
+| `provision.sh` | Install Docker, Node, Python, Caddy + write Caddyfile |
+| `deploy.sh [all\|backend\|dashboard\|app]` | Deploy code to server |
+| `teardown.sh` | Destroy server, firewall, DNS (with confirmation) |
