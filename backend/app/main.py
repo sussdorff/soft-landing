@@ -24,7 +24,7 @@ from app.adapters.repositories import (
 from app.adapters.static_data import StaticDataAdapter
 from app.adapters.websocket_notification import WebSocketNotificationAdapter
 from app.db.engine import async_session, init_db
-from app.models import DenyRequest, IngestEventRequest, SimulateRequest, WishRequest
+from app.models import DenyRequest, IngestEventRequest, ResolveRequest, SimulateRequest, WishRequest
 from app.ports.flight_data import FlightDataPort
 from app.ports.grounding import GroundingPort
 from app.seeds import scenario_snowstorm
@@ -185,6 +185,12 @@ async def ingest_disruption(req: IngestEventRequest, request: Request):
     return dis.model_dump(by_alias=True, mode="json")
 
 
+@app.get("/disruptions")
+async def list_disruptions(request: Request):
+    disruptions = await request.app.state.disruption_repo.list_disruptions()
+    return [d.model_dump(by_alias=True, mode="json") for d in disruptions]
+
+
 @app.get("/disruptions/{disruption_id}")
 async def get_disruption(disruption_id: str, request: Request):
     dis = await request.app.state.disruption_repo.get_disruption(disruption_id)
@@ -200,6 +206,18 @@ async def get_disruption_passengers(disruption_id: str, request: Request):
         raise HTTPException(404, "Disruption not found")
     pax_list = await request.app.state.disruption_repo.get_disruption_passengers(disruption_id)
     return [p.model_dump(by_alias=True, mode="json") for p in pax_list]
+
+
+@app.get("/disruptions/{disruption_id}/options")
+async def get_disruption_options(disruption_id: str, request: Request):
+    dis = await request.app.state.disruption_repo.get_disruption(disruption_id)
+    if not dis:
+        raise HTTPException(404, "Disruption not found")
+    opts_map = await request.app.state.option_repo.get_disruption_options(disruption_id)
+    return {
+        pid: [o.model_dump(by_alias=True, mode="json") for o in opts]
+        for pid, opts in opts_map.items()
+    }
 
 
 # --- Passengers ---
@@ -280,6 +298,38 @@ async def submit_wish(passenger_id: str, req: WishRequest, request: Request):
         "passengerId": passenger_id,
         "selectedOptionId": req.selected_option_id,
     })
+    return wish.model_dump(by_alias=True, mode="json")
+
+
+@app.post("/passengers/{passenger_id}/resolve")
+async def resolve_passenger(passenger_id: str, req: ResolveRequest, request: Request):
+    """Atomically create and approve a wish for a passenger (gate agent shortcut)."""
+    pax = await request.app.state.passenger_repo.get_passenger(passenger_id)
+    if not pax:
+        raise HTTPException(404, "Passenger not found")
+
+    wish = await request.app.state.wish_repo.create_wish(
+        passenger_id=passenger_id,
+        disruption_id=req.disruption_id,
+        selected_option_id=req.selected_option_id,
+        ranked_option_ids=[req.selected_option_id],
+    )
+
+    await request.app.state.notification.send_to_dashboard(req.disruption_id, "wish_submitted", {
+        "wishId": wish.id,
+        "passengerId": passenger_id,
+        "selectedOptionId": req.selected_option_id,
+    })
+
+    wish = await request.app.state.wish_repo.approve_wish(wish.id)
+    if not wish:
+        raise HTTPException(500, "Failed to approve wish")
+
+    await request.app.state.notification.send_to_passenger(passenger_id, "wish_approved", {
+        "wishId": wish.id,
+        "selectedOptionId": wish.selected_option_id,
+    })
+
     return wish.model_dump(by_alias=True, mode="json")
 
 

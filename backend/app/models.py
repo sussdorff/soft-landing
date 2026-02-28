@@ -285,6 +285,11 @@ class DenyRequest(CamelModel):
     reason: str
 
 
+class ResolveRequest(CamelModel):
+    disruption_id: str
+    selected_option_id: str
+
+
 class SimulateRequest(CamelModel):
     scenario: str = "munich_snowstorm"
 

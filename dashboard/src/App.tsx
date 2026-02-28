@@ -7,7 +7,7 @@ import { PassengerProfile } from "./components/PassengerProfile";
 import { useDisruption } from "./hooks/use-disruption";
 import { useWishes } from "./hooks/use-wishes";
 import { api } from "./api";
-import type { Disruption, Option, Wish } from "./types";
+import type { Disruption, Option, Wish, WSEvent } from "./types";
 
 type Tab = "overview" | "wishes";
 
@@ -50,6 +50,25 @@ function App() {
   useEffect(() => {
     if (!disruptionId) return;
     api.getOptions(disruptionId).then(setOptionsRaw);
+  }, [disruptionId]);
+
+  // Handle disruption_created and options_updated WS events
+  useEffect(() => {
+    const unsub = api.onEvent((event: WSEvent) => {
+      if (event.type === "disruption_created") {
+        const { disruptionId: newId } = event.data as { disruptionId: string };
+        api.getDisruption(newId).then((d) => {
+          setDisruptions((prev) =>
+            prev.some((existing) => existing.id === d.id)
+              ? prev
+              : [...prev, d]
+          );
+        });
+      } else if (event.type === "options_updated" && disruptionId) {
+        api.getOptions(disruptionId).then(setOptionsRaw);
+      }
+    });
+    return unsub;
   }, [disruptionId]);
 
   // Global keyboard shortcuts

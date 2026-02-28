@@ -112,6 +112,7 @@ export interface Wish {
 export interface PassengerProfile extends Passenger {
   options: Option[];
   wishes: Wish[];
+  disruptions?: Disruption[];
 }
 
 // WebSocket event types

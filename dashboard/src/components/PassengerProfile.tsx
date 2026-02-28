@@ -106,6 +106,46 @@ export function PassengerProfile({ passengerId, onClose }: Props) {
               </div>
             </section>
 
+            {/* Related disruptions */}
+            {profile.disruptions && profile.disruptions.length > 0 && (
+              <section>
+                <h3 className="text-xs font-mono text-text-muted uppercase tracking-wider mb-2">
+                  Related Disruptions ({profile.disruptions.length})
+                </h3>
+                <div className="space-y-1.5">
+                  {profile.disruptions.map((d) => (
+                    <div
+                      key={d.id}
+                      className="px-3 py-2 bg-surface-700 rounded text-sm"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="px-1.5 py-0.5 text-[10px] font-mono rounded bg-accent-red/15 text-accent-red uppercase">
+                          {d.type}
+                        </span>
+                        <span className="font-mono font-semibold text-text-primary">
+                          {d.flightNumber}
+                        </span>
+                        <span className="font-mono text-text-secondary">
+                          {d.origin} → {d.destination}
+                        </span>
+                      </div>
+                      <div className="text-text-secondary mt-1">
+                        {d.reason}
+                      </div>
+                      <div className="font-mono text-[10px] text-text-muted mt-1 tabular-nums">
+                        {new Date(d.detectedAt).toLocaleString("en-GB", {
+                          month: "short",
+                          day: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
             {/* Available options */}
             <section>
               <h3 className="text-xs font-mono text-text-muted uppercase tracking-wider mb-2">

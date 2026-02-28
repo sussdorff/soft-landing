@@ -102,6 +102,14 @@ class DisruptionRepository(ABC):
         """
 
     @abstractmethod
+    async def list_disruptions(self) -> list[Disruption]:
+        """Fetch all disruptions.
+
+        Returns:
+            List of all disruptions (may be empty).
+        """
+
+    @abstractmethod
     async def is_empty(self) -> bool:
         """Check whether any disruptions exist in the store.
 
@@ -204,6 +212,19 @@ class OptionRepository(ABC):
 
         Returns:
             List of options (may be empty).
+        """
+
+    @abstractmethod
+    async def get_disruption_options(
+        self, disruption_id: str,
+    ) -> dict[str, list[Option]]:
+        """Fetch all options for all passengers linked to a disruption.
+
+        Args:
+            disruption_id: Unique disruption identifier.
+
+        Returns:
+            Dict mapping passenger_id to their list of options.
         """
 
     @abstractmethod

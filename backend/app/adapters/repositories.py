@@ -227,6 +227,15 @@ class SqlDisruptionRepository(DisruptionRepository):
             pax.sort(key=lambda p: (-p.priority, p.name))
             return pax
 
+    async def list_disruptions(self) -> list[Disruption]:
+        async with self._session_factory() as session:
+            stmt = (
+                select(DisruptionRow)
+                .options(selectinload(DisruptionRow.passengers))
+            )
+            rows = (await session.execute(stmt)).scalars().unique().all()
+            return [_row_to_disruption(r) for r in rows]
+
     async def is_empty(self) -> bool:
         async with self._session_factory() as session:
             stmt = select(DisruptionRow.id).limit(1)
@@ -329,6 +338,21 @@ class SqlOptionRepository(OptionRepository):
             stmt = select(OptionRow).where(OptionRow.passenger_id == passenger_id)
             rows = (await session.execute(stmt)).scalars().all()
             return [_row_to_option(r) for r in rows]
+
+    async def get_disruption_options(
+        self, disruption_id: str,
+    ) -> dict[str, list[Option]]:
+        async with self._session_factory() as session:
+            stmt = (
+                select(OptionRow)
+                .join(DisruptionPassengerRow, OptionRow.passenger_id == DisruptionPassengerRow.passenger_id)
+                .where(DisruptionPassengerRow.disruption_id == disruption_id)
+            )
+            rows = (await session.execute(stmt)).scalars().all()
+            result: dict[str, list[Option]] = {}
+            for row in rows:
+                result.setdefault(row.passenger_id, []).append(_row_to_option(row))
+            return result
 
     async def delete_options(self, option_ids: list[str]) -> None:
         if not option_ids:

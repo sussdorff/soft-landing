@@ -42,6 +42,7 @@ interface BackendProfile {
   passenger: BackendPassenger;
   options: Option[];
   wishes: Wish[];
+  disruptions?: Disruption[];
 }
 
 // ── Transform helpers ──────────────────────────────────────────────
@@ -97,17 +98,11 @@ export function createApiAdapter(): DashboardAPI {
 
   return {
     async getDisruptions() {
-      // No list endpoint — return what we know about.
-      // If empty, fetch the default simulation disruption.
-      if (knownDisruptions.size === 0) {
-        try {
-          const d = await fetchJSON<Disruption>("/disruptions/dis-snowstorm-001");
-          knownDisruptions.set(d.id, d);
-        } catch {
-          // not found — that's fine
-        }
+      const disruptions = await fetchJSON<Disruption[]>("/disruptions");
+      for (const d of disruptions) {
+        knownDisruptions.set(d.id, d);
       }
-      return Array.from(knownDisruptions.values());
+      return disruptions;
     },
 
     async getDisruption(id) {
@@ -125,29 +120,9 @@ export function createApiAdapter(): DashboardAPI {
     },
 
     async getOptions(disruptionId) {
-      // Backend has per-passenger options, not per-disruption.
-      // Fetch passenger list, then batch-fetch options for each.
-      const passengers = await fetchJSON<BackendPassenger[]>(
-        `/disruptions/${disruptionId}/passengers`
+      return fetchJSON<Record<string, Option[]>>(
+        `/disruptions/${disruptionId}/options`
       );
-
-      const results: Record<string, Option[]> = {};
-
-      // Fetch in parallel, batched to avoid overwhelming the server
-      const BATCH_SIZE = 10;
-      for (let i = 0; i < passengers.length; i += BATCH_SIZE) {
-        const batch = passengers.slice(i, i + BATCH_SIZE);
-        const optionsBatch = await Promise.all(
-          batch.map((p) =>
-            fetchJSON<Option[]>(`/passengers/${p.id}/options`).catch(() => [])
-          )
-        );
-        batch.forEach((p, idx) => {
-          results[p.id] = optionsBatch[idx];
-        });
-      }
-
-      return results;
     },
 
     async getWishes(disruptionId) {
@@ -163,6 +138,7 @@ export function createApiAdapter(): DashboardAPI {
         ...passenger,
         options: raw.options,
         wishes: raw.wishes,
+        disruptions: raw.disruptions,
       } as PassengerProfile;
     },
 
@@ -178,18 +154,10 @@ export function createApiAdapter(): DashboardAPI {
     },
 
     async resolveManually(passengerId, optionId, disruptionId) {
-      // 1. Submit wish on behalf of passenger
-      const wish = await fetchJSON<Wish>(`/passengers/${passengerId}/wish`, {
+      return fetchJSON<Wish>(`/passengers/${passengerId}/resolve`, {
         method: "POST",
-        body: JSON.stringify({
-          disruptionId,
-          selectedOptionId: optionId,
-          rankedOptionIds: [optionId],
-        }),
+        body: JSON.stringify({ disruptionId, selectedOptionId: optionId }),
       });
-      // 2. Immediately approve it
-      await fetchJSON(`/wishes/${wish.id}/approve`, { method: "POST" });
-      return { ...wish, status: "approved" as const };
     },
 
     onEvent(handler) {

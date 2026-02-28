@@ -170,6 +170,26 @@ class TestSqlDisruptionRepository:
             await _seed_disruption(session)
         assert await repo.is_empty() is False
 
+    async def test_list_disruptions_empty(self, session_factory):
+        repo = SqlDisruptionRepository(session_factory)
+        result = await repo.list_disruptions()
+        assert result == []
+
+    async def test_list_disruptions(self, session_factory):
+        repo = SqlDisruptionRepository(session_factory)
+        async with session_factory() as session:
+            await _seed_passenger(session, "pax-001")
+            await _seed_disruption(session, "dis-001", ["pax-001"])
+            await _seed_disruption(session, "dis-002")
+
+        result = await repo.list_disruptions()
+        assert len(result) == 2
+        ids = {d.id for d in result}
+        assert ids == {"dis-001", "dis-002"}
+        # Verify passenger linkage
+        dis_with_pax = next(d for d in result if d.id == "dis-001")
+        assert "pax-001" in dis_with_pax.affected_passenger_ids
+
     async def test_create_disruption_sets_passenger_status(self, session_factory):
         repo = SqlDisruptionRepository(session_factory)
         pax_repo = SqlPassengerRepository(session_factory)
