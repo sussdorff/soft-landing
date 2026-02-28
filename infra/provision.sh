@@ -104,10 +104,8 @@ ${DOMAIN} {
     }
 
     # User documentation (MkDocs Material)
-    handle /docs* {
-        uri strip_prefix /docs
+    handle_path /docs/* {
         root * /opt/softlanding/docs/site
-        try_files {path} /index.html
         file_server
     }
 
