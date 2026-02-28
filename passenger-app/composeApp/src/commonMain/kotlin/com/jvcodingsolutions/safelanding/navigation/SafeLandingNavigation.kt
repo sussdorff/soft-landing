@@ -14,6 +14,7 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.ui.NavDisplay
 import com.jvcodingsolutions.safelanding.features.options.OptionsScreen
 import com.jvcodingsolutions.safelanding.features.status.StatusScreen
+import com.jvcodingsolutions.safelanding.features.status.StatusScreenRoot
 
 @Composable
 fun SafeLandingNavigation(
@@ -53,7 +54,7 @@ fun SafeLandingNavigation(
             entries = navigationState.toEntries(
                 entryProvider {
                     entry<Route.StatusRoute> {
-                        StatusScreen()
+                        StatusScreenRoot()
                     }
                     entry<Route.OptionsRoute> {
                         OptionsScreen()
