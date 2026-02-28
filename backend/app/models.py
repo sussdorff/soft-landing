@@ -336,6 +336,7 @@ class ResolveRequest(CamelModel):
 
 class SimulateRequest(CamelModel):
     scenario: str = "munich_snowstorm"
+    reset: bool = False
 
 
 class IngestEventRequest(CamelModel):

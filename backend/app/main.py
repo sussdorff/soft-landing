@@ -124,10 +124,13 @@ async def lifespan(app: FastAPI):
     app.state.option_generator = option_generator
     app.state.lh_client = lh_client
 
-    # Auto-seed snowstorm scenario if DB is empty
+    # Auto-seed all scenarios if DB is empty
     if await disruption_repo.is_empty():
+        from app.seeds import scenario_delay
         async with async_session() as session:
             await scenario_snowstorm.seed(session)
+        async with async_session() as session:
+            await scenario_delay.seed(session)
         await _generate_options_for_disruption(
             disruption_repo, option_generator, "MUC",
         )
@@ -187,56 +190,202 @@ app.add_middleware(
 
 @app.post("/disruptions/simulate")
 async def simulate_disruption(req: SimulateRequest, request: Request):
-    from app.db.engine import drop_db
+    """Seed a disruption scenario additively (without wiping the DB).
 
-    await drop_db()
-    await init_db()
-
-    # Seed passengers, segments, and disruption record (no options)
-    if req.scenario == "diversion":
-        from app.seeds import scenario_diversion
-        async with async_session() as seed_session:
-            dis_id = await scenario_diversion.seed(seed_session)
-        origin = "NUE"  # Passengers diverted to Nuremberg
-    elif req.scenario == "delay":
-        from app.seeds import scenario_delay
-        async with async_session() as seed_session:
-            dis_id = await scenario_delay.seed(seed_session)
-        origin = "MUC"
-    else:
-        async with async_session() as seed_session:
-            dis_id = await scenario_snowstorm.seed(seed_session)
-        origin = "MUC"
-
-    # Generate options via OptionGenerator (uses LH API / Gemini if configured)
+    If the scenario already exists, returns 409 unless reset=true.
+    When reset=true, deletes only that scenario's data before re-seeding.
+    """
     disruption_repo = request.app.state.disruption_repo
     option_generator = request.app.state.option_generator
-    await _generate_options_for_disruption(disruption_repo, option_generator, origin)
 
-    dis = await disruption_repo.get_disruption(dis_id)
-    if not dis:
-        raise HTTPException(500, "Failed to seed scenario")
+    # Map scenario name → (seed function, expected disruption IDs, origin)
+    scenario_map = _get_scenario_map()
+    if req.scenario not in scenario_map:
+        raise HTTPException(400, f"Unknown scenario: {req.scenario}. Available: {list(scenario_map)}")
 
-    # Send WS notifications for the seeded disruption
+    seed_fn, expected_ids, origin, _legacy = scenario_map[req.scenario]
+
+    # Check if scenario already exists (including legacy IDs)
+    all_known_ids = expected_ids + scenario_map[req.scenario][3]  # legacy IDs
+    existing = [
+        dis_id for dis_id in all_known_ids
+        if await disruption_repo.get_disruption(dis_id) is not None
+    ]
+    if existing and not req.reset:
+        raise HTTPException(
+            409,
+            f"Scenario '{req.scenario}' already seeded ({len(existing)} disruptions). "
+            f"Use reset=true to re-seed.",
+        )
+
+    # If resetting, delete this scenario's data (current + legacy IDs)
+    if existing and req.reset:
+        await _delete_scenario_data(existing)
+
+    # Seed the scenario
+    async with async_session() as seed_session:
+        result = await seed_fn(seed_session)
+
+    # result is either a single ID (str) or list of IDs
+    dis_ids = result if isinstance(result, list) else [result]
+
+    # Generate options for the newly seeded disruptions
+    for dis_id in dis_ids:
+        dis = await disruption_repo.get_disruption(dis_id)
+        if not dis:
+            continue
+        pax_list = await disruption_repo.get_disruption_passengers(dis_id)
+        for pax in pax_list:
+            await option_generator.generate_options(
+                dis_id,
+                pax.id,
+                dis.type,
+                dis.destination,
+                origin=origin,
+                loyalty_tier=pax.loyalty_tier,
+                booking_class=pax.booking_class,
+            )
+
+    # Send WS notifications for all seeded disruptions
     notification = request.app.state.notification
-    await notification.send_to_dashboard(dis.id, "disruption_created", {
-        "disruptionId": dis.id,
-        "type": dis.type.value,
-        "flightNumber": dis.flight_number,
-        "affectedPassengers": len(dis.affected_passenger_ids),
-    })
-    for pax_id in dis.affected_passenger_ids:
-        await notification.send_to_passenger(pax_id, "disruption_notification", {
+    seeded_disruptions = []
+    for dis_id in dis_ids:
+        dis = await disruption_repo.get_disruption(dis_id)
+        if not dis:
+            continue
+        seeded_disruptions.append(dis)
+        await notification.send_to_dashboard(dis.id, "disruption_created", {
             "disruptionId": dis.id,
             "type": dis.type.value,
             "flightNumber": dis.flight_number,
+            "affectedPassengers": len(dis.affected_passenger_ids),
         })
-        await notification.send_to_passenger(pax_id, "options_ready", {
-            "disruptionId": dis.id,
-            "passengerId": pax_id,
-        })
+        for pax_id in dis.affected_passenger_ids:
+            await notification.send_to_passenger(pax_id, "disruption_notification", {
+                "disruptionId": dis.id,
+                "type": dis.type.value,
+                "flightNumber": dis.flight_number,
+            })
+            await notification.send_to_passenger(pax_id, "options_ready", {
+                "disruptionId": dis.id,
+                "passengerId": pax_id,
+            })
 
-    return dis.model_dump(by_alias=True, mode="json")
+    return [d.model_dump(by_alias=True, mode="json") for d in seeded_disruptions]
+
+
+def _get_scenario_map():
+    """Return mapping: scenario → (seed_fn, expected_ids, origin, legacy_ids)."""
+    from app.seeds import scenario_diversion, scenario_delay
+
+    return {
+        "munich_snowstorm": (
+            scenario_snowstorm.seed,
+            scenario_snowstorm.DISRUPTION_IDS,
+            "MUC",
+            scenario_snowstorm.LEGACY_IDS,
+        ),
+        "diversion": (
+            scenario_diversion.seed,
+            [scenario_diversion.DISRUPTION_ID],
+            "NUE",
+            [],
+        ),
+        "delay": (
+            scenario_delay.seed,
+            [scenario_delay.DISRUPTION_ID],
+            "MUC",
+            [],
+        ),
+    }
+
+
+async def _delete_scenario_data(disruption_ids: list[str]) -> None:
+    """Delete all data associated with the given disruption IDs.
+
+    Cascading delete: disruption → disruption_passengers, and the
+    linked passengers → segments, options, wishes.
+    """
+    from sqlalchemy import delete, select
+
+    from app.db.tables import (
+        DisruptionPassengerRow,
+        DisruptionRow,
+        OptionRow,
+        PassengerRow,
+        SegmentRow,
+        WishRow,
+    )
+
+    async with async_session() as session:
+        # Find all passenger IDs linked to these disruptions
+        stmt = select(DisruptionPassengerRow.passenger_id).where(
+            DisruptionPassengerRow.disruption_id.in_(disruption_ids)
+        )
+        pax_ids = list((await session.execute(stmt)).scalars().all())
+
+        if pax_ids:
+            # Delete wishes, options, segments for these passengers
+            await session.execute(
+                delete(WishRow).where(WishRow.passenger_id.in_(pax_ids))
+            )
+            await session.execute(
+                delete(OptionRow).where(OptionRow.passenger_id.in_(pax_ids))
+            )
+            await session.execute(
+                delete(SegmentRow).where(SegmentRow.passenger_id.in_(pax_ids))
+            )
+
+        # Delete disruption-passenger links
+        await session.execute(
+            delete(DisruptionPassengerRow).where(
+                DisruptionPassengerRow.disruption_id.in_(disruption_ids)
+            )
+        )
+
+        if pax_ids:
+            # Delete passengers
+            await session.execute(
+                delete(PassengerRow).where(PassengerRow.id.in_(pax_ids))
+            )
+
+        # Delete disruptions
+        await session.execute(
+            delete(DisruptionRow).where(DisruptionRow.id.in_(disruption_ids))
+        )
+
+        await session.commit()
+
+
+@app.post("/disruptions/{disruption_id}/generate-options")
+async def generate_options_for_disruption(disruption_id: str, request: Request):
+    """Generate options for all passengers of a disruption that don't have options yet."""
+    disruption_repo = request.app.state.disruption_repo
+    option_repo = request.app.state.option_repo
+    option_generator = request.app.state.option_generator
+
+    dis = await disruption_repo.get_disruption(disruption_id)
+    if not dis:
+        raise HTTPException(404, "Disruption not found")
+
+    pax_list = await disruption_repo.get_disruption_passengers(disruption_id)
+    generated = 0
+    for pax in pax_list:
+        existing = await option_repo.get_passenger_options(pax.id)
+        if existing:
+            continue
+        await option_generator.generate_options(
+            disruption_id,
+            pax.id,
+            dis.type,
+            dis.destination,
+            origin=dis.origin,
+            loyalty_tier=pax.loyalty_tier,
+            booking_class=pax.booking_class,
+        )
+        generated += 1
+
+    return {"disruptionId": disruption_id, "passengersProcessed": generated, "alreadyHadOptions": len(pax_list) - generated}
 
 
 @app.post("/disruptions/ingest")
