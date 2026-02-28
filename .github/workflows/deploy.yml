@@ -11,6 +11,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: dashboard/package-lock.json
+
+      - name: Build dashboard
+        working-directory: dashboard
+        run: |
+          npm ci
+          npm run build
+
       - name: Setup SSH key
         run: |
           mkdir -p ~/.ssh
@@ -35,8 +48,7 @@ jobs:
       - name: Deploy dashboard
         run: |
           rsync -avz --delete \
-            --exclude 'node_modules' --exclude '.next' \
-            dashboard/ root@46.224.137.140:/opt/softlanding/dashboard/
+            dashboard/dist/ root@46.224.137.140:/opt/softlanding/dashboard/dist/
 
       - name: Deploy passenger app
         run: |
@@ -52,4 +64,5 @@ jobs:
       - name: Verify deployment
         run: |
           curl -sf https://softlanding.sussdorff.de/ || echo "Health check pending"
+          curl -sf https://softlanding.sussdorff.de/dashboard/ || echo "Dashboard health check pending"
           curl -sf https://softlanding.sussdorff.de/docs/ || echo "Docs health check pending"

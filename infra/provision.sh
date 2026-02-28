@@ -109,16 +109,16 @@ ${DOMAIN} {
     }
 
     # Gate Agent Dashboard (React SPA)
-    handle /dashboard/* {
+    handle_path /dashboard/* {
         root * /opt/softlanding/dashboard/dist
-        try_files {path} /dashboard/index.html
+        try_files {path} /index.html
         file_server
     }
 
     # Passenger App (KMP/Web target — static files)
-    handle /app/* {
+    handle_path /app/* {
         root * /opt/softlanding/passenger-app/web
-        try_files {path} /app/index.html
+        try_files {path} /index.html
         file_server
     }
 
