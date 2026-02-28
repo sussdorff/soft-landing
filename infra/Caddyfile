@@ -1,7 +1,11 @@
 softlanding.sussdorff.de {
+    # Root redirects to dashboard
+    redir / /dashboard/ 308
+
     # Redirect bare paths to trailing slash
     redir /docs /docs/ 308
     redir /dashboard /dashboard/ 308
+    redir /passenger-app /passenger-app/ 308
 
     # User documentation (MkDocs Material)
     handle_path /docs/* {
@@ -13,9 +17,9 @@ softlanding.sussdorff.de {
         reverse_proxy localhost:3000
     }
 
-    # Passenger App (KMP/Web target — not yet built)
-    handle_path /app/* {
-        respond "Coming Soon" 200
+    # Passenger App (KMP/WASM)
+    handle /passenger-app/* {
+        reverse_proxy localhost:3003
     }
 
     # Backend API — everything else goes to FastAPI

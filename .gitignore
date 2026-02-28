@@ -27,7 +27,7 @@ dist/
 .cxx
 local.properties
 *.class
-/*/build/
+**/build/
 .kotlin/
 
 # MkDocs build output

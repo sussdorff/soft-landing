@@ -2,7 +2,6 @@ package com.jvcodingsolutions.safelanding.core.networking
 
 import co.touchlab.kermit.Logger
 import io.ktor.client.HttpClient
-import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.defaultRequest
 import io.ktor.client.plugins.logging.LogLevel
@@ -16,7 +15,7 @@ import kotlinx.serialization.json.Json
 class HttpClientFactory(
 ) {
     fun build(): HttpClient {
-        return HttpClient(CIO) {
+        return HttpClient {
             install(ContentNegotiation) {
                 json(
                     json = Json {
