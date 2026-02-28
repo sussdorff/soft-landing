@@ -5,7 +5,13 @@ All notable changes to SoftLanding will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [CalVer](https://calver.org/) versioning (YYYY.0M.MICRO).
 
-## [Unreleased]
+## [2026.02.1] - 2026-02-28
+
+### Maintenance
+
+- Add VERSION file (CalVer 2026.02.0)
+
+## [2026.02.0] - 2026-02-28
 
 ### Added
 
@@ -23,6 +29,7 @@ and this project uses [CalVer](https://calver.org/) versioning (YYYY.0M.MICRO).
 - Extend API contract with WS paths, option detail types, and full REST endpoints
 - Record architecture decisions, create monorepo structure
 - Add infrastructure section to README
+- Update changelog
 
 ### Fixed
 
