@@ -18,7 +18,7 @@ function isInputFocused() {
 
 function App() {
   const [disruptions, setDisruptions] = useState<Disruption[]>([]);
-  const [disruptionId, setDisruptionId] = useState<string>("dis-001");
+  const [disruptionId, setDisruptionId] = useState<string | null>(null);
   const { disruption, passengers, loading, error } =
     useDisruption(disruptionId);
   const { wishes, pendingWishes, resolvedWishes, approve, deny, resolveManually } =
@@ -32,13 +32,19 @@ function App() {
   const paxSearchRef = useRef<HTMLInputElement>(null);
   const flightSearchRef = useRef<HTMLInputElement>(null);
 
-  // Load all disruptions for the flight selector
+  // Load all disruptions for the flight selector, auto-select first
   useEffect(() => {
-    api.getDisruptions().then(setDisruptions);
+    api.getDisruptions().then((ds) => {
+      setDisruptions(ds);
+      if (!disruptionId && ds.length > 0) {
+        setDisruptionId(ds[0].id);
+      }
+    });
   }, []);
 
   // Load options when disruption changes
   useEffect(() => {
+    if (!disruptionId) return;
     api.getOptions(disruptionId).then(setOptionsRaw);
   }, [disruptionId]);
 

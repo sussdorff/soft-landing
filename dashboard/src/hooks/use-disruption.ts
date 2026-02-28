@@ -2,13 +2,14 @@ import { useEffect, useState } from "react";
 import { api } from "../api";
 import type { Disruption, Passenger, WSEvent } from "../types";
 
-export function useDisruption(disruptionId: string) {
+export function useDisruption(disruptionId: string | null) {
   const [disruption, setDisruption] = useState<Disruption | null>(null);
   const [passengers, setPassengers] = useState<Passenger[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!disruptionId) return;
     let cancelled = false;
     setLoading(true);
 
@@ -37,6 +38,7 @@ export function useDisruption(disruptionId: string) {
 
   // Re-fetch passengers when wish status changes (approve/deny/resolve)
   useEffect(() => {
+    if (!disruptionId) return;
     const unsub = api.onEvent((event: WSEvent) => {
       if (
         event.type === "wish_approved" ||

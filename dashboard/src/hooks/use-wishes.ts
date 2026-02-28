@@ -2,12 +2,13 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "../api";
 import type { Wish, WSEvent } from "../types";
 
-export function useWishes(disruptionId: string) {
+export function useWishes(disruptionId: string | null) {
   const [wishes, setWishes] = useState<Wish[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Initial fetch
   useEffect(() => {
+    if (!disruptionId) return;
     let cancelled = false;
     api.getWishes(disruptionId).then((w) => {
       if (!cancelled) {
@@ -59,6 +60,7 @@ export function useWishes(disruptionId: string) {
 
   const resolveManually = useCallback(
     async (passengerId: string, optionId: string) => {
+      if (!disruptionId) return;
       const wish = await api.resolveManually(passengerId, optionId, disruptionId);
       setWishes((prev) => [wish, ...prev]);
     },
