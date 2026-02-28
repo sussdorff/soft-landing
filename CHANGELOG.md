@@ -7,10 +7,26 @@ and this project uses [CalVer](https://calver.org/) versioning (YYYY.0M.MICRO).
 
 ## [Unreleased]
 
+### Fixed
+
+- **backend**: Make simulate endpoint additive and split snowstorm into per-flight disruptions
+
+## [2026.02.13] - 2026-02-28
+
 ### Added
 
 - **backend**: Add delay scenario — LH2072 MUC-HAM delayed 30 min
+- **dashboard**: Format option details using structured data
+- **dashboard**: Split wish stream into Incoming/Resolved tabs with edit support
 - **backend**: Add ahead-of-flight context engine with pre-flight briefings
+
+### Documentation
+
+- Update changelog
+
+### Maintenance
+
+- Bump version to 2026.02.13
 
 ## [2026.02.12] - 2026-02-28
 
