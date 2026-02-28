@@ -1,22 +1,22 @@
 import type { Wish, Passenger, Option } from "../types";
-import { WishCard } from "./WishCard";
+import { ResolvedCard } from "./ResolvedCard";
 
 interface Props {
-  pendingWishes: Wish[];
+  resolvedWishes: Wish[];
   passengers: Passenger[];
   optionsByPassenger: Map<string, Option[]>;
-  onApprove: (wishId: string) => void;
-  onDeny: (wishId: string, reason: string) => void;
   onViewProfile: (passengerId: string) => void;
+  onResolve: (passengerId: string, optionId: string) => Promise<void>;
+  onRefreshOptions: (passengerId: string) => Promise<Option[]>;
 }
 
-export function WishStream({
-  pendingWishes,
+export function ResolvedStream({
+  resolvedWishes,
   passengers,
   optionsByPassenger,
-  onApprove,
-  onDeny,
   onViewProfile,
+  onResolve,
+  onRefreshOptions,
 }: Props) {
   const paxMap = new Map(passengers.map((p) => [p.id, p]));
 
@@ -25,52 +25,40 @@ export function WishStream({
     return opts?.find((o) => o.id === wish.selectedOptionId);
   }
 
-  // Sort pending wishes: highest priority first, then earliest submission
-  const sortedPending = [...pendingWishes].sort((a, b) => {
-    const aPax = paxMap.get(a.passengerId);
-    const bPax = paxMap.get(b.passengerId);
-    const aPri = aPax?.priority ?? 0;
-    const bPri = bPax?.priority ?? 0;
-    if (aPri !== bPri) return bPri - aPri;
-    return a.submittedAt.localeCompare(b.submittedAt);
-  });
-
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-3 border-b border-surface-600">
         <div className="flex items-center gap-2">
           <h2 className="text-sm font-semibold text-text-primary">
-            Passenger Wishes
+            Resolved Passengers
           </h2>
-          {pendingWishes.length > 0 && (
-            <span className="px-1.5 py-0.5 text-[10px] font-mono font-bold rounded-full bg-accent-blue/20 text-accent-blue tabular-nums">
-              {pendingWishes.length}
+          {resolvedWishes.length > 0 && (
+            <span className="px-1.5 py-0.5 text-[10px] font-mono font-bold rounded-full bg-surface-500 text-text-secondary tabular-nums">
+              {resolvedWishes.length}
             </span>
           )}
         </div>
-        <span className="text-[10px] font-mono text-text-muted uppercase tracking-wider">
-          Live Stream
-        </span>
       </div>
 
-      {/* Wish list */}
+      {/* Resolved list */}
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
-        {sortedPending.map((wish) => (
-          <WishCard
+        {resolvedWishes.map((wish) => (
+          <ResolvedCard
             key={wish.id}
             wish={wish}
             passenger={paxMap.get(wish.passengerId)}
             selectedOption={getSelectedOption(wish)}
-            onApprove={onApprove}
-            onDeny={onDeny}
+            allOptions={optionsByPassenger.get(wish.passengerId) ?? []}
             onViewProfile={onViewProfile}
+            onResolve={onResolve}
+            onRefreshOptions={onRefreshOptions}
           />
         ))}
-        {sortedPending.length === 0 && (
+        {resolvedWishes.length === 0 && (
           <div className="flex flex-col items-center justify-center h-40 text-text-muted text-sm">
             <div className="text-2xl mb-2">—</div>
-            No pending wishes
+            No resolved passengers yet
           </div>
         )}
       </div>

@@ -3,13 +3,14 @@ import { Layout } from "./components/Layout";
 import { OverviewPanel } from "./components/OverviewPanel";
 import { FlightOverview } from "./components/FlightOverview";
 import { WishStream } from "./components/WishStream";
+import { ResolvedStream } from "./components/ResolvedStream";
 import { PassengerProfile } from "./components/PassengerProfile";
 import { useDisruption } from "./hooks/use-disruption";
 import { useWishes } from "./hooks/use-wishes";
 import { api } from "./api";
 import type { Disruption, Option, Wish, WSEvent } from "./types";
 
-type Tab = "overview" | "wishes";
+type Tab = "overview" | "wishes" | "resolved";
 
 function isInputFocused() {
   const el = document.activeElement;
@@ -90,6 +91,10 @@ function App() {
           break;
         case "2":
           setActiveTab("wishes");
+          e.preventDefault();
+          break;
+        case "3":
+          setActiveTab("resolved");
           e.preventDefault();
           break;
         case "/":
@@ -196,15 +201,24 @@ function App() {
             active={activeTab === "wishes"}
             onClick={() => setActiveTab("wishes")}
             count={pendingWishes.length}
+            pulse
             shortcut="2"
           >
             Wish Stream
+          </TabButton>
+          <TabButton
+            active={activeTab === "resolved"}
+            onClick={() => setActiveTab("resolved")}
+            count={resolvedWishes.length}
+            shortcut="3"
+          >
+            Resolved
           </TabButton>
         </div>
 
         {/* Content area */}
         <div className="flex-1 overflow-hidden m-4 mt-2 bg-surface-800 border border-surface-600 rounded-lg">
-          {activeTab === "overview" ? (
+          {activeTab === "overview" && (
             <FlightOverview
               disruption={disruption}
               passengers={passengers}
@@ -214,14 +228,22 @@ function App() {
               onResolve={resolveManually}
               searchRef={paxSearchRef}
             />
-          ) : (
+          )}
+          {activeTab === "wishes" && (
             <WishStream
               pendingWishes={pendingWishes}
-              resolvedWishes={resolvedWishes}
               passengers={passengers}
               optionsByPassenger={optionsByPassenger}
               onApprove={approve}
               onDeny={deny}
+              onViewProfile={setProfileId}
+            />
+          )}
+          {activeTab === "resolved" && (
+            <ResolvedStream
+              resolvedWishes={resolvedWishes}
+              passengers={passengers}
+              optionsByPassenger={optionsByPassenger}
               onViewProfile={setProfileId}
               onResolve={resolveManually}
               onRefreshOptions={refreshOptions}
@@ -236,6 +258,7 @@ function App() {
           <span className="text-[10px] font-mono text-text-muted uppercase tracking-wider">Shortcuts</span>
           <Kbd k="1">Flight Overview</Kbd>
           <Kbd k="2">Wish Stream</Kbd>
+          <Kbd k="3">Resolved</Kbd>
           <Kbd k="/">Search passengers</Kbd>
           <Kbd k="F">Search flights</Kbd>
           <Kbd k="Esc">Close / clear</Kbd>
@@ -270,12 +293,14 @@ function TabButton({
   active,
   onClick,
   count,
+  pulse,
   shortcut,
   children,
 }: {
   active: boolean;
   onClick: () => void;
   count?: number;
+  pulse?: boolean;
   shortcut?: string;
   children: React.ReactNode;
 }) {
@@ -295,7 +320,11 @@ function TabButton({
       )}
       {children}
       {count !== undefined && count > 0 && (
-        <span className="ml-2 px-2 py-1 text-xs font-mono font-bold rounded-full bg-accent-blue text-surface-900 tabular-nums animate-pulse">
+        <span className={`ml-2 px-2 py-1 text-xs font-mono font-bold rounded-full tabular-nums ${
+          pulse
+            ? "bg-accent-blue text-surface-900 animate-pulse"
+            : "bg-surface-600 text-text-secondary"
+        }`}>
           {count}
         </span>
       )}
