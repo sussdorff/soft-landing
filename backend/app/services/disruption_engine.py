@@ -1,37 +1,22 @@
 """Disruption Engine — event detection, classification, and orchestration.
 
 Receives raw disruption events, classifies them, finds affected passengers,
-triggers option generation, and sends WebSocket notifications.
+triggers option generation, and sends notifications via injected ports.
 """
 
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime
-from typing import TYPE_CHECKING
-from uuid import uuid4
+from typing import Protocol
 
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-from sqlalchemy.orm import selectinload
-
-from app.db.tables import (
-    DisruptionPassengerRow,
-    DisruptionRow,
-    PassengerRow,
-    SegmentRow,
-)
-from app.models import BookingClass, DisruptionType, LoyaltyTier
-from app.services.gemini import GeminiGroundingService
-from app.services.option_generator import OptionGenerator
-from app.ws import ConnectionManager
-
-if TYPE_CHECKING:
-    from app.services.lufthansa import LufthansaClient
+from app.models import BookingClass, DisruptionType, LoyaltyTier, Passenger
+from app.ports.grounding import GroundingPort
+from app.ports.notification import NotificationPort
+from app.ports.repositories import DisruptionRepository
 
 log = logging.getLogger(__name__)
 
-# Status code → DisruptionType mapping
+# Status code -> DisruptionType mapping
 _STATUS_MAP: dict[str, DisruptionType] = {
     "CNL": DisruptionType.CANCELLATION,
     "DVT": DisruptionType.DIVERSION,
@@ -48,21 +33,39 @@ _KEYWORD_MAP: list[tuple[list[str], DisruptionType]] = [
 ]
 
 
+class OptionGeneratorPort(Protocol):
+    """Minimal contract for option generation used by the engine.
+
+    The current OptionGenerator satisfies this once Task #6 refactors it
+    to drop the session parameter.
+    """
+
+    async def generate_options(
+        self,
+        disruption_id: str,
+        passenger_id: str,
+        disruption_type: DisruptionType,
+        destination: str,
+        *,
+        loyalty_tier: LoyaltyTier = LoyaltyTier.NONE,
+        booking_class: BookingClass = BookingClass.Y,
+    ) -> list[str]: ...
+
+
 class DisruptionEngine:
     """Orchestrates disruption event processing."""
 
     def __init__(
         self,
-        session_factory: async_sessionmaker[AsyncSession],
-        ws_manager: ConnectionManager,
-        gemini: GeminiGroundingService | None = None,
-        lh_client: LufthansaClient | None = None,
+        disruption_repo: DisruptionRepository,
+        grounding: GroundingPort,
+        option_generator: OptionGeneratorPort,
+        notification: NotificationPort,
     ) -> None:
-        self.session_factory = session_factory
-        self.ws_manager = ws_manager
-        self.gemini = gemini
-        self.lh_client = lh_client
-        self.option_generator = OptionGenerator(gemini=gemini, lh_client=lh_client)
+        self._disruption_repo = disruption_repo
+        self._grounding = grounding
+        self._option_generator = option_generator
+        self._notification = notification
 
     @staticmethod
     def classify_event(raw: dict) -> DisruptionType:
@@ -82,114 +85,79 @@ class DisruptionEngine:
 
         return DisruptionType.DELAY
 
-    @staticmethod
-    async def find_affected_passengers(
-        session: AsyncSession, flight_number: str,
-    ) -> list[PassengerRow]:
-        """Find all passengers who have a segment on the given flight."""
-        stmt = (
-            select(PassengerRow)
-            .join(SegmentRow)
-            .where(SegmentRow.flight_number == flight_number)
-            .options(selectinload(PassengerRow.segments))
-        )
-        rows = (await session.execute(stmt)).scalars().unique().all()
-        return list(rows)
-
     async def ingest_event(self, raw: dict) -> str:
         """Orchestrate full disruption processing.
 
         1. Classify event
-        2. Create disruption record
-        3. Find affected passengers
-        4. Link passengers to disruption
+        2. Find affected passengers
+        3. Generate explanation via grounding
+        4. Create disruption record (links passengers, sets status)
         5. Generate options for each passenger
-        6. Send WebSocket notifications
+        6. Send notifications
 
         Returns the disruption ID.
         """
         dtype = self.classify_event(raw)
-        disruption_id = uuid4().hex[:8]
-        now = datetime.now(tz=UTC)
+        flight_number = raw["flight_number"]
+        origin = raw.get("origin", "")
+        destination = raw.get("destination", "")
 
-        # Generate explanation — prefer Gemini, fall back to raw payload
-        explanation = raw.get("explanation", "")
-        if self.gemini is not None:
-            try:
-                explanation = await self.gemini.explain_disruption(
-                    dtype.value,
-                    raw["flight_number"],
-                    raw.get("origin", ""),
-                    raw.get("destination", ""),
-                    raw.get("reason", ""),
-                )
-            except Exception:
-                log.exception("Gemini explain_disruption failed, using fallback")
-                explanation = raw.get("explanation", "")
+        # Find affected passengers (before creating the disruption)
+        passengers = await self._disruption_repo.find_affected_passengers(
+            flight_number,
+        )
 
-        async with self.session_factory() as session:
-            # Create disruption row
-            disruption = DisruptionRow(
-                id=disruption_id,
-                type=dtype.value,
-                flight_number=raw["flight_number"],
-                origin=raw.get("origin", ""),
-                destination=raw.get("destination", ""),
-                reason=raw.get("reason", ""),
-                explanation=explanation,
-                detected_at=now,
+        # Generate explanation via grounding port (graceful fallback)
+        explanation = await self._grounding.explain_disruption(
+            dtype.value,
+            flight_number,
+            origin,
+            destination,
+            raw.get("reason", ""),
+        )
+
+        # Create disruption + link passengers + set status to NOTIFIED
+        disruption_id = await self._disruption_repo.create_disruption(
+            disruption_type=dtype,
+            flight_number=flight_number,
+            origin=origin,
+            destination=destination,
+            reason=raw.get("reason", ""),
+            explanation=explanation,
+            affected_passenger_ids=[p.id for p in passengers],
+        )
+
+        # Generate options for each passenger
+        for pax in passengers:
+            await self._option_generator.generate_options(
+                disruption_id,
+                pax.id,
+                dtype,
+                destination,
+                loyalty_tier=pax.loyalty_tier,
+                booking_class=pax.booking_class,
             )
-            session.add(disruption)
 
-            # Find affected passengers
-            passengers = await self.find_affected_passengers(
-                session, raw["flight_number"],
-            )
-
-            # Link passengers + update status + generate options
-            for pax in passengers:
-                session.add(DisruptionPassengerRow(
-                    disruption_id=disruption_id,
-                    passenger_id=pax.id,
-                ))
-                pax.status = "notified"
-
-                # Resolve loyalty/booking from passenger row
-                loyalty = LoyaltyTier(pax.loyalty_tier) if pax.loyalty_tier else LoyaltyTier.NONE
-                booking = BookingClass(pax.booking_class) if pax.booking_class else BookingClass.Y
-
-                # Generate options (async — may call Gemini)
-                await self.option_generator.generate_options(
-                    session,
-                    disruption_id,
-                    pax.id,
-                    dtype,
-                    raw.get("destination", ""),
-                    now,
-                    loyalty_tier=loyalty,
-                    booking_class=booking,
-                )
-
-            await session.commit()
-
-        # Send WebSocket notifications (outside the DB session)
-        await self.ws_manager.send_to_dashboard(disruption_id, "disruption_created", {
-            "disruptionId": disruption_id,
-            "type": dtype.value,
-            "flightNumber": raw["flight_number"],
-            "affectedPassengers": len(passengers),
-        })
+        # Send notifications (fire-and-forget via port)
+        await self._notification.send_to_dashboard(
+            disruption_id, "disruption_created", {
+                "disruptionId": disruption_id,
+                "type": dtype.value,
+                "flightNumber": flight_number,
+                "affectedPassengers": len(passengers),
+            },
+        )
 
         for pax in passengers:
-            await self.ws_manager.send_to_passenger(
+            await self._notification.send_to_passenger(
                 pax.id, "disruption_notification", {
                     "disruptionId": disruption_id,
                     "type": dtype.value,
-                    "flightNumber": raw["flight_number"],
+                    "flightNumber": flight_number,
                     "reason": raw.get("reason", ""),
                 },
             )
-            await self.ws_manager.send_to_passenger(
+            await self._notification.send_to_passenger(
                 pax.id, "options_ready", {
                     "disruptionId": disruption_id,
                     "passengerId": pax.id,
