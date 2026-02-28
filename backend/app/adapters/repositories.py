@@ -358,6 +358,11 @@ class SqlOptionRepository(OptionRepository):
             await session.commit()
         return option_id
 
+    async def get_option(self, option_id: str) -> Option | None:
+        async with self._session_factory() as session:
+            row = await session.get(OptionRow, option_id)
+            return _row_to_option(row) if row else None
+
     async def get_passenger_options(
         self, passenger_id: str,
     ) -> list[Option]:
@@ -437,13 +442,17 @@ class SqlWishRepository(WishRepository):
             await session.commit()
             return _row_to_wish(row)
 
-    async def approve_wish(self, wish_id: str) -> Wish | None:
+    async def approve_wish(
+        self,
+        wish_id: str,
+        confirmation_details: str | None = None,
+    ) -> Wish | None:
         async with self._session_factory() as session:
             row = await session.get(WishRow, wish_id)
             if not row:
                 return None
             row.status = WishStatus.APPROVED.value
-            row.confirmation_details = "Approved by gate agent"
+            row.confirmation_details = confirmation_details or "Approved by gate agent"
 
             pax = await session.get(PassengerRow, row.passenger_id)
             if pax:
@@ -487,6 +496,24 @@ class SqlWishRepository(WishRepository):
                 stmt = stmt.where(WishRow.disruption_id == disruption_id)
             rows = (await session.execute(stmt)).scalars().all()
             return [_row_to_wish(r) for r in rows]
+
+    async def has_pending_wish(
+        self,
+        passenger_id: str,
+        disruption_id: str,
+    ) -> bool:
+        async with self._session_factory() as session:
+            stmt = (
+                select(WishRow.id)
+                .where(
+                    WishRow.passenger_id == passenger_id,
+                    WishRow.disruption_id == disruption_id,
+                    WishRow.status == WishStatus.PENDING.value,
+                )
+                .limit(1)
+            )
+            result = (await session.execute(stmt)).scalar_one_or_none()
+            return result is not None
 
     async def find_competing_wishes(
         self,

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from app.models import Wish, WishStatus
+from app.models import Option, OptionType, Wish, WishStatus
 from app.ports.notification import NotificationPort
 from app.ports.repositories import (
     DisruptionRepository,
@@ -26,6 +26,7 @@ class ApprovalResult:
     """Result of handling an approval, including cascading impacts."""
     approved_wish: Wish | None
     affected_passenger_ids: list[str] = field(default_factory=list)
+    rejected_reason: str | None = None
 
 
 class StateManager:
@@ -78,6 +79,32 @@ class StateManager:
             "denialCount": pax.denial_count,
         })
 
+        # Notify passenger with available options for re-selection
+        available_options = [
+            o for o in await self._options.get_passenger_options(passenger_id)
+            if o.available
+        ]
+
+        await self._notification.send_to_passenger(passenger_id, "wish_denied", {
+            "wishId": wish.id,
+            "reason": reason,
+            "denialCount": pax.denial_count,
+            "noAlternatives": len(available_options) == 0,
+            "availableOptions": [
+                {"id": o.id, "type": o.type.value, "summary": o.summary}
+                for o in available_options
+            ],
+        })
+
+        # Notify dashboard about the denial
+        await self._notification.send_to_dashboard(disruption_id, "wish_denied", {
+            "wishId": wish.id,
+            "passengerId": passenger_id,
+            "reason": reason,
+            "newPriority": new_priority,
+            "denialCount": pax.denial_count,
+        })
+
         return wish
 
     async def handle_approval(
@@ -87,17 +114,49 @@ class StateManager:
     ) -> ApprovalResult:
         """Approve a wish and compute cascading impact.
 
+        Guards:
+        - Option must still be available (returns rejected_reason if not).
+        - Wish must be PENDING (returns None for double-approval).
+
         Returns the approved wish plus a list of passenger IDs whose
         selected option became unavailable.
         """
-        wish = await self._wishes.approve_wish(wish_id)
+        # Pre-flight: look up the wish to get option_id and check status
+        pending_wish = await self._wishes.get_wish(wish_id)
+        if not pending_wish:
+            return ApprovalResult(approved_wish=None)
+        if pending_wish.status != WishStatus.PENDING:
+            return ApprovalResult(approved_wish=None)
+
+        # Guard: check option availability
+        option = await self._options.get_option(pending_wish.selected_option_id)
+        if not option or not option.available:
+            return ApprovalResult(
+                approved_wish=None,
+                rejected_reason="option_unavailable",
+            )
+
+        # Build confirmation text from option details
+        confirmation = self._build_confirmation_details(option)
+
+        # Approve the wish with confirmation text
+        wish = await self._wishes.approve_wish(wish_id, confirmation)
         if not wish:
             return ApprovalResult(approved_wish=None)
 
-        # Notify the approved passenger
+        # Lock the approved option (mark unavailable for others)
+        await self._options.mark_unavailable(wish.selected_option_id)
+
+        # Notify the approved passenger with enriched payload
         await self._notification.send_to_passenger(wish.passenger_id, "wish_approved", {
             "wishId": wish.id,
             "selectedOptionId": wish.selected_option_id,
+            "confirmationDetails": wish.confirmation_details,
+            "option": {
+                "type": option.type.value,
+                "summary": option.summary,
+                "details": option.details.model_dump(mode="json"),
+            },
         })
 
         # Find competing wishes in the same disruption for the same option
@@ -141,6 +200,63 @@ class StateManager:
             approved_wish=wish,
             affected_passenger_ids=affected_ids,
         )
+
+    @staticmethod
+    def _build_confirmation_details(option: Option) -> str:
+        """Generate human-readable confirmation text based on option type."""
+        match option.type:
+            case OptionType.REBOOK:
+                d = option.details
+                return f"Confirmed on {d.flight_number} departing {d.departure:%H:%M}."
+            case OptionType.HOTEL:
+                d = option.details
+                return f"Room confirmed at {d.hotel_name}. Next flight: {d.next_flight_number}."
+            case OptionType.GROUND:
+                d = option.details
+                return f"{d.mode.value.title()} transport confirmed. Departs {d.departure:%H:%M}."
+            case OptionType.ALT_AIRPORT:
+                d = option.details
+                return f"Rerouted via {d.via_airport}. Connecting flight: {d.connecting_flight}."
+            case OptionType.LOUNGE:
+                d = option.details
+                return f"Lounge access confirmed: {d.lounge_name}, {d.terminal}."
+            case OptionType.VOUCHER:
+                d = option.details
+                return f"{d.voucher_type.title()} voucher ({d.amount_eur}\u20ac) confirmed."
+            case _:
+                return "Your preference has been confirmed."
+
+    async def preview_impact(
+        self,
+        wish_id: str,
+        disruption_id: str,
+    ) -> dict:
+        """Preview cascading impact of approving a wish (read-only, no side effects)."""
+        wish = await self._wishes.get_wish(wish_id)
+        if not wish:
+            return {"error": "Wish not found"}
+
+        competing = await self._wishes.find_competing_wishes(
+            disruption_id=disruption_id,
+            option_id=wish.selected_option_id,
+            exclude_passenger_id=wish.passenger_id,
+        )
+
+        affected = []
+        for w in competing:
+            pax = await self._passengers.get_passenger(w.passenger_id)
+            affected.append({
+                "passengerId": w.passenger_id,
+                "passengerName": pax.name if pax else "Unknown",
+                "wishId": w.id,
+            })
+
+        return {
+            "wishId": wish_id,
+            "selectedOptionId": wish.selected_option_id,
+            "affectedPassengers": affected,
+            "affectedCount": len(affected),
+        }
 
     async def _compute_escalated_priority(
         self,

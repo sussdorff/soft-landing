@@ -344,6 +344,9 @@ async def submit_wish(passenger_id: str, req: WishRequest, request: Request):
     if not pax:
         raise HTTPException(404, "Passenger not found")
 
+    if await request.app.state.wish_repo.has_pending_wish(passenger_id, req.disruption_id):
+        raise HTTPException(409, "Passenger already has a pending wish for this disruption")
+
     wish = await request.app.state.wish_repo.create_wish(
         passenger_id=passenger_id,
         disruption_id=req.disruption_id,
@@ -418,6 +421,8 @@ async def approve_wish(
 
     sm: StateManager = request.app.state.state_manager
     result = await sm.handle_approval(wish_id, disruption_id)
+    if result.rejected_reason == "option_unavailable":
+        raise HTTPException(409, "Option is no longer available")
     if not result.approved_wish:
         raise HTTPException(404, "Wish not found")
 
@@ -425,6 +430,22 @@ async def approve_wish(
         "wish": result.approved_wish.model_dump(by_alias=True, mode="json"),
         "affectedPassengerIds": result.affected_passenger_ids,
     }
+
+
+@app.get("/wishes/{wish_id}/impact-preview")
+async def preview_wish_impact(
+    wish_id: str,
+    request: Request,
+    disruption_id: str = Query(None, alias="disruptionId"),
+):
+    if not disruption_id:
+        wish = await request.app.state.wish_repo.get_wish(wish_id)
+        if not wish:
+            raise HTTPException(404, "Wish not found")
+        disruption_id = wish.disruption_id
+
+    sm: StateManager = request.app.state.state_manager
+    return await sm.preview_impact(wish_id, disruption_id)
 
 
 @app.post("/wishes/{wish_id}/deny")
@@ -441,10 +462,6 @@ async def deny_wish(wish_id: str, req: DenyRequest, request: Request):
     if not denied:
         raise HTTPException(404, "Wish not found")
 
-    await request.app.state.notification.send_to_passenger(wish.passenger_id, "wish_denied", {
-        "wishId": denied.id,
-        "reason": req.reason,
-    })
     return denied.model_dump(by_alias=True, mode="json")
 
 

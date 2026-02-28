@@ -267,6 +267,14 @@ class OptionRepository(ABC):
         """
 
     @abstractmethod
+    async def get_option(self, option_id: str) -> Option | None:
+        """Fetch a single option by ID.
+
+        Returns:
+            The option, or None if not found.
+        """
+
+    @abstractmethod
     async def mark_unavailable(self, option_id: str) -> None:
         """Mark a single option as unavailable.
 
@@ -310,13 +318,19 @@ class WishRepository(ABC):
         """
 
     @abstractmethod
-    async def approve_wish(self, wish_id: str) -> Wish | None:
+    async def approve_wish(
+        self,
+        wish_id: str,
+        confirmation_details: str | None = None,
+    ) -> Wish | None:
         """Mark a wish as approved by the gate agent.
 
         Also updates the passenger's status to APPROVED.
 
         Args:
             wish_id: Unique wish identifier.
+            confirmation_details: Human-readable confirmation text.
+                Falls back to a generic message if not provided.
 
         Returns:
             The updated wish, or None if not found.
@@ -361,6 +375,22 @@ class WishRepository(ABC):
 
         Returns:
             List of wishes (may be empty).
+        """
+
+    @abstractmethod
+    async def has_pending_wish(
+        self,
+        passenger_id: str,
+        disruption_id: str,
+    ) -> bool:
+        """Check whether a PENDING wish already exists for this passenger+disruption.
+
+        Args:
+            passenger_id: Unique passenger identifier.
+            disruption_id: Unique disruption identifier.
+
+        Returns:
+            True if a pending wish exists.
         """
 
     @abstractmethod

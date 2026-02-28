@@ -454,3 +454,84 @@ class TestSqlWishRepository:
         wishes = await repo.list_wishes(disruption_id="dis-001")
         assert len(wishes) == 1
         assert wishes[0].disruption_id == "dis-001"
+
+
+# --- get_option ---
+
+
+class TestGetOption:
+    async def test_get_option_returns_option(self, session_factory):
+        repo = SqlOptionRepository(session_factory)
+        async with session_factory() as session:
+            await _seed_passenger(session, "pax-001")
+            await _seed_option(session, "opt-001", "pax-001")
+
+        opt = await repo.get_option("opt-001")
+        assert opt is not None
+        assert opt.id == "opt-001"
+        assert opt.type == OptionType.REBOOK
+
+    async def test_get_option_nonexistent(self, session_factory):
+        repo = SqlOptionRepository(session_factory)
+        opt = await repo.get_option("nonexistent")
+        assert opt is None
+
+
+# --- approve_wish with confirmation_details ---
+
+
+class TestApproveWishConfirmation:
+    async def test_approve_wish_stores_confirmation(self, session_factory):
+        repo = SqlWishRepository(session_factory)
+        async with session_factory() as session:
+            await _seed_passenger(session, "pax-001")
+            await _seed_disruption(session, "dis-001", ["pax-001"])
+            await _seed_option(session, "opt-001")
+            await _seed_wish(session, "wish-001")
+
+        wish = await repo.approve_wish("wish-001", "Confirmed on LH98 departing 08:00.")
+        assert wish is not None
+        assert wish.confirmation_details == "Confirmed on LH98 departing 08:00."
+
+    async def test_approve_wish_default_confirmation(self, session_factory):
+        repo = SqlWishRepository(session_factory)
+        async with session_factory() as session:
+            await _seed_passenger(session, "pax-001")
+            await _seed_disruption(session, "dis-001", ["pax-001"])
+            await _seed_option(session, "opt-001")
+            await _seed_wish(session, "wish-001")
+
+        wish = await repo.approve_wish("wish-001")
+        assert wish is not None
+        assert wish.confirmation_details == "Approved by gate agent"
+
+
+# --- has_pending_wish ---
+
+
+class TestHasPendingWish:
+    async def test_has_pending_wish_true(self, session_factory):
+        repo = SqlWishRepository(session_factory)
+        async with session_factory() as session:
+            await _seed_passenger(session, "pax-001")
+            await _seed_disruption(session, "dis-001", ["pax-001"])
+            await _seed_option(session, "opt-001")
+            await _seed_wish(session, "wish-001")
+
+        assert await repo.has_pending_wish("pax-001", "dis-001") is True
+
+    async def test_has_pending_wish_false_none(self, session_factory):
+        repo = SqlWishRepository(session_factory)
+        assert await repo.has_pending_wish("pax-001", "dis-001") is False
+
+    async def test_has_pending_wish_false_denied(self, session_factory):
+        repo = SqlWishRepository(session_factory)
+        async with session_factory() as session:
+            await _seed_passenger(session, "pax-001")
+            await _seed_disruption(session, "dis-001", ["pax-001"])
+            await _seed_option(session, "opt-001")
+            await _seed_wish(session, "wish-001")
+
+        # Deny the wish — has_pending_wish should now return False
+        await repo.deny_wish("wish-001", "No availability")
+        assert await repo.has_pending_wish("pax-001", "dis-001") is False

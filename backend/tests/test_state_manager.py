@@ -262,13 +262,16 @@ class TestCascadingImpact:
         sm, notification = _make_state_manager(session_factory)
         await sm.handle_approval("wish-001", "dis-001")
 
-        # The approved passenger should get wish_approved notification
-        notification.send_to_passenger.assert_any_call(
-            "pax-001", "wish_approved", {
-                "wishId": "wish-001",
-                "selectedOptionId": "opt-shared",
-            },
-        )
+        # The approved passenger should get wish_approved notification with enriched payload
+        pax_calls = notification.send_to_passenger.call_args_list
+        approved_calls = [c for c in pax_calls if c.args[1] == "wish_approved"]
+        assert len(approved_calls) == 1
+        data = approved_calls[0].args[2]
+        assert data["wishId"] == "wish-001"
+        assert data["selectedOptionId"] == "opt-shared"
+        assert "confirmationDetails" in data
+        assert "option" in data
+        assert data["option"]["type"] == "rebook"
 
     async def test_approve_nonexistent_wish_returns_none(self, session_factory):
         sm, _ = _make_state_manager(session_factory)
@@ -361,3 +364,262 @@ class TestMarkOptionUnavailable:
         option_repo = SqlOptionRepository(session_factory)
         # Should not raise
         await option_repo.mark_unavailable("nonexistent")
+
+
+# --- Enriched Approval ---
+
+
+class TestEnrichedApproval:
+    async def test_approval_sends_enriched_wish_approved(self, session_factory):
+        """wish_approved event includes confirmationDetails and option."""
+        async with session_factory() as session:
+            await _seed_passenger(session, "pax-001", "Alice", priority=10)
+            await _seed_disruption(session, "dis-001", ["pax-001"])
+            await _seed_option(session, "opt-001", "pax-001")
+            await _seed_wish(session, "wish-001", "pax-001", selected_option_id="opt-001")
+
+        sm, notification = _make_state_manager(session_factory)
+        result = await sm.handle_approval("wish-001", "dis-001")
+
+        assert result.approved_wish is not None
+        pax_calls = notification.send_to_passenger.call_args_list
+        approved_calls = [c for c in pax_calls if c.args[1] == "wish_approved"]
+        assert len(approved_calls) == 1
+        data = approved_calls[0].args[2]
+        assert data["wishId"] == "wish-001"
+        assert data["selectedOptionId"] == "opt-001"
+        assert "Confirmed on LH98" in data["confirmationDetails"]
+        assert data["option"]["type"] == "rebook"
+        assert data["option"]["summary"] == "Rebook opt-001"
+        assert "flight_number" in data["option"]["details"]
+
+    async def test_approval_rejects_unavailable_option(self, session_factory):
+        """Returns rejected_reason when option is unavailable."""
+        async with session_factory() as session:
+            await _seed_passenger(session, "pax-001", "Alice", priority=10)
+            await _seed_disruption(session, "dis-001", ["pax-001"])
+            await _seed_option(session, "opt-001", "pax-001")
+            await _seed_wish(session, "wish-001", "pax-001", selected_option_id="opt-001")
+
+        # Mark option unavailable before approval
+        option_repo = SqlOptionRepository(session_factory)
+        await option_repo.mark_unavailable("opt-001")
+
+        sm, notification = _make_state_manager(session_factory)
+        result = await sm.handle_approval("wish-001", "dis-001")
+
+        assert result.approved_wish is None
+        assert result.rejected_reason == "option_unavailable"
+        # No WS notifications should have been sent
+        notification.send_to_passenger.assert_not_called()
+        notification.send_to_dashboard.assert_not_called()
+
+    async def test_approval_locks_approved_option(self, session_factory):
+        """Approved option is marked unavailable after approval."""
+        async with session_factory() as session:
+            await _seed_passenger(session, "pax-001", "Alice", priority=10)
+            await _seed_disruption(session, "dis-001", ["pax-001"])
+            await _seed_option(session, "opt-001", "pax-001")
+            await _seed_wish(session, "wish-001", "pax-001", selected_option_id="opt-001")
+
+        sm, _ = _make_state_manager(session_factory)
+        await sm.handle_approval("wish-001", "dis-001")
+
+        option_repo = SqlOptionRepository(session_factory)
+        opt = await option_repo.get_option("opt-001")
+        assert opt is not None
+        assert opt.available is False
+
+    async def test_double_approval_returns_none(self, session_factory):
+        """Approving an already-approved wish returns None (no double-process)."""
+        async with session_factory() as session:
+            await _seed_passenger(session, "pax-001", "Alice", priority=10)
+            await _seed_disruption(session, "dis-001", ["pax-001"])
+            await _seed_option(session, "opt-001", "pax-001")
+            await _seed_wish(session, "wish-001", "pax-001",
+                             selected_option_id="opt-001", status="approved")
+
+        sm, _ = _make_state_manager(session_factory)
+        result = await sm.handle_approval("wish-001", "dis-001")
+        assert result.approved_wish is None
+
+    async def test_approval_confirmation_rebook(self, session_factory):
+        """Confirmation text for REBOOK option."""
+        async with session_factory() as session:
+            await _seed_passenger(session, "pax-001", "Alice", priority=10)
+            await _seed_disruption(session, "dis-001", ["pax-001"])
+            await _seed_option(session, "opt-001", "pax-001")
+            await _seed_wish(session, "wish-001", "pax-001", selected_option_id="opt-001")
+
+        sm, _ = _make_state_manager(session_factory)
+        result = await sm.handle_approval("wish-001", "dis-001")
+        assert "Confirmed on LH98 departing 08:00" in result.approved_wish.confirmation_details
+
+    async def test_approval_confirmation_hotel(self, session_factory):
+        """Confirmation text for HOTEL option."""
+        async with session_factory() as session:
+            await _seed_passenger(session, "pax-001", "Alice", priority=10)
+            await _seed_disruption(session, "dis-001", ["pax-001"])
+            # Seed a hotel option
+            session.add(OptionRow(
+                id="opt-hotel", passenger_id="pax-001", type="hotel",
+                summary="Hotel Marriott", description="Overnight stay",
+                details_json={"hotel_name": "Marriott Munich", "address": "...",
+                              "location": {"lat": 48.1, "lng": 11.5},
+                              "next_flight_number": "LH99",
+                              "next_flight_departure": "2026-03-02T08:00:00"},
+                available=True,
+                estimated_arrival=datetime.now(tz=UTC) + timedelta(hours=20),
+            ))
+            await session.commit()
+            await _seed_wish(session, "wish-001", "pax-001", selected_option_id="opt-hotel")
+
+        sm, _ = _make_state_manager(session_factory)
+        result = await sm.handle_approval("wish-001", "dis-001")
+        assert "Marriott Munich" in result.approved_wish.confirmation_details
+        assert "LH99" in result.approved_wish.confirmation_details
+
+
+# --- Enriched Denial ---
+
+
+class TestEnrichedDenial:
+    async def test_denial_sends_wish_denied_to_passenger(self, session_factory):
+        """StateManager sends wish_denied with available options."""
+        async with session_factory() as session:
+            await _seed_passenger(session, "pax-001", "Alice", priority=10)
+            await _seed_disruption(session, "dis-001", ["pax-001"])
+            await _seed_option(session, "opt-001", "pax-001")
+            await _seed_option(session, "opt-002", "pax-001")
+            await _seed_wish(session, "wish-001", "pax-001", selected_option_id="opt-001")
+
+        sm, notification = _make_state_manager(session_factory)
+        await sm.handle_denial("wish-001", "dis-001", "pax-001", reason="No seats")
+
+        pax_calls = notification.send_to_passenger.call_args_list
+        denied_calls = [c for c in pax_calls if c.args[1] == "wish_denied"]
+        assert len(denied_calls) == 1
+        data = denied_calls[0].args[2]
+        assert data["wishId"] == "wish-001"
+        assert data["reason"] == "No seats"
+        assert data["denialCount"] == 1
+        assert data["noAlternatives"] is False
+        # opt-001 was the denied wish's option — it should still be available
+        # (denial doesn't mark the option unavailable, only approval does)
+        assert len(data["availableOptions"]) == 2
+
+    async def test_denial_sends_wish_denied_to_dashboard(self, session_factory):
+        """Dashboard gets wish_denied event."""
+        async with session_factory() as session:
+            await _seed_passenger(session, "pax-001", "Alice", priority=10)
+            await _seed_disruption(session, "dis-001", ["pax-001"])
+            await _seed_option(session, "opt-001", "pax-001")
+            await _seed_wish(session, "wish-001", "pax-001", selected_option_id="opt-001")
+
+        sm, notification = _make_state_manager(session_factory)
+        await sm.handle_denial("wish-001", "dis-001", "pax-001", reason="No seats")
+
+        dash_calls = notification.send_to_dashboard.call_args_list
+        denied_calls = [c for c in dash_calls if c.args[1] == "wish_denied"]
+        assert len(denied_calls) == 1
+        data = denied_calls[0].args[2]
+        assert data["wishId"] == "wish-001"
+        assert data["passengerId"] == "pax-001"
+        assert data["reason"] == "No seats"
+        assert isinstance(data["newPriority"], int)
+
+    async def test_denial_no_alternatives_flag(self, session_factory):
+        """noAlternatives is True when all options are unavailable."""
+        async with session_factory() as session:
+            await _seed_passenger(session, "pax-001", "Alice", priority=10)
+            await _seed_disruption(session, "dis-001", ["pax-001"])
+            await _seed_option(session, "opt-001", "pax-001")
+            await _seed_wish(session, "wish-001", "pax-001", selected_option_id="opt-001")
+
+        # Mark the only option unavailable
+        option_repo = SqlOptionRepository(session_factory)
+        await option_repo.mark_unavailable("opt-001")
+
+        sm, notification = _make_state_manager(session_factory)
+        await sm.handle_denial("wish-001", "dis-001", "pax-001")
+
+        pax_calls = notification.send_to_passenger.call_args_list
+        denied_calls = [c for c in pax_calls if c.args[1] == "wish_denied"]
+        data = denied_calls[0].args[2]
+        assert data["noAlternatives"] is True
+        assert data["availableOptions"] == []
+
+    async def test_denial_excludes_unavailable_options(self, session_factory):
+        """availableOptions filters out unavailable options."""
+        async with session_factory() as session:
+            await _seed_passenger(session, "pax-001", "Alice", priority=10)
+            await _seed_disruption(session, "dis-001", ["pax-001"])
+            await _seed_option(session, "opt-001", "pax-001")
+            await _seed_option(session, "opt-002", "pax-001")
+            await _seed_wish(session, "wish-001", "pax-001", selected_option_id="opt-001")
+
+        # Mark opt-001 unavailable
+        option_repo = SqlOptionRepository(session_factory)
+        await option_repo.mark_unavailable("opt-001")
+
+        sm, notification = _make_state_manager(session_factory)
+        await sm.handle_denial("wish-001", "dis-001", "pax-001")
+
+        pax_calls = notification.send_to_passenger.call_args_list
+        denied_calls = [c for c in pax_calls if c.args[1] == "wish_denied"]
+        data = denied_calls[0].args[2]
+        assert len(data["availableOptions"]) == 1
+        assert data["availableOptions"][0]["id"] == "opt-002"
+
+
+# --- Impact Preview ---
+
+
+class TestImpactPreview:
+    async def test_preview_impact_returns_competing(self, session_factory):
+        """preview_impact finds correct competing wishes."""
+        async with session_factory() as session:
+            await _seed_passenger(session, "pax-001", "Alice", priority=20)
+            await _seed_passenger(session, "pax-002", "Bob", priority=10)
+            await _seed_disruption(session, "dis-001", ["pax-001", "pax-002"])
+            await _seed_option(session, "opt-shared", "pax-001")
+            # Bob also selects opt-shared
+            await _seed_wish(session, "wish-001", "pax-001", selected_option_id="opt-shared")
+            await _seed_wish(session, "wish-002", "pax-002", selected_option_id="opt-shared")
+
+        sm, _ = _make_state_manager(session_factory)
+        result = await sm.preview_impact("wish-001", "dis-001")
+
+        assert result["wishId"] == "wish-001"
+        assert result["affectedCount"] == 1
+        assert result["affectedPassengers"][0]["passengerId"] == "pax-002"
+        assert result["affectedPassengers"][0]["passengerName"] == "Bob"
+
+    async def test_preview_impact_no_side_effects(self, session_factory):
+        """preview_impact doesn't modify any state."""
+        async with session_factory() as session:
+            await _seed_passenger(session, "pax-001", "Alice", priority=20)
+            await _seed_passenger(session, "pax-002", "Bob", priority=10)
+            await _seed_disruption(session, "dis-001", ["pax-001", "pax-002"])
+            await _seed_option(session, "opt-shared", "pax-001")
+            await _seed_wish(session, "wish-001", "pax-001", selected_option_id="opt-shared")
+            await _seed_wish(session, "wish-002", "pax-002", selected_option_id="opt-shared")
+
+        sm, notification = _make_state_manager(session_factory)
+        await sm.preview_impact("wish-001", "dis-001")
+
+        # No notifications should have been sent
+        notification.send_to_passenger.assert_not_called()
+        notification.send_to_dashboard.assert_not_called()
+
+        # Wish status should still be pending
+        wish_repo = SqlWishRepository(session_factory)
+        w1 = await wish_repo.get_wish("wish-001")
+        assert w1.status == WishStatus.PENDING
+        w2 = await wish_repo.get_wish("wish-002")
+        assert w2.status == WishStatus.PENDING
+
+    async def test_preview_impact_nonexistent_wish(self, session_factory):
+        sm, _ = _make_state_manager(session_factory)
+        result = await sm.preview_impact("nonexistent", "dis-001")
+        assert "error" in result
