@@ -1,0 +1,29 @@
+softlanding.sussdorff.de {
+    # Redirect bare paths to trailing slash
+    redir /docs /docs/ 308
+    redir /dashboard /dashboard/ 308
+
+    # User documentation (MkDocs Material)
+    handle_path /docs/* {
+        reverse_proxy docs:80
+    }
+
+    # Gate Agent Dashboard (nginx container handles /dashboard/ prefix)
+    handle /dashboard/* {
+        reverse_proxy dashboard:80
+    }
+
+    # Passenger App (KMP/Web target — not yet built)
+    handle_path /app/* {
+        respond "Coming Soon" 200
+    }
+
+    # Backend API — everything else goes to FastAPI
+    handle {
+        reverse_proxy backend:8000
+    }
+}
+
+get-softlanding.sussdorff.de {
+    reverse_proxy landing:80
+}

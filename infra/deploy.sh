@@ -2,7 +2,7 @@
 # Deploy application to the SoftLanding server
 #
 # Builds Docker images (ARM), pushes to GHCR, then pulls on server.
-# Docs and landing page are still rsync-deployed (simple static files).
+# All services run in Docker — no host installs needed.
 #
 # Usage:
 #   bash infra/deploy.sh              # Deploy all
@@ -10,12 +10,15 @@
 #   bash infra/deploy.sh dashboard    # Deploy dashboard only
 #   bash infra/deploy.sh docs         # Deploy documentation only
 #   bash infra/deploy.sh landing      # Deploy landing page only
+#   bash infra/deploy.sh caddy        # Deploy Caddyfile only
 
 set -euo pipefail
 
 COMPONENT="${1:-all}"
 BACKEND_IMAGE="ghcr.io/sussdorff/soft-landing-backend"
 DASHBOARD_IMAGE="ghcr.io/sussdorff/soft-landing-dashboard"
+DOCS_IMAGE="ghcr.io/sussdorff/soft-landing-docs"
+LANDING_IMAGE="ghcr.io/sussdorff/soft-landing-landing"
 SHA=$(git rev-parse --short HEAD)
 
 deploy_backend() {
@@ -44,23 +47,43 @@ deploy_dashboard() {
   echo "    Dashboard deployed"
 }
 
-deploy_compose() {
-  echo "==> Deploying docker-compose.yml to server"
-  scp docker-compose.prod.yml softlanding:/opt/softlanding/docker-compose.yml
-}
-
 deploy_docs() {
-  echo "==> Deploying docs"
-  (cd docs && pip install -r requirements.txt -q && mkdocs build)
-  rsync -avz --delete docs/site/ "softlanding:/opt/softlanding/docs/site/"
+  echo "==> Building docs image (linux/arm64)"
+  docker buildx build --platform linux/arm64 \
+    -t "${DOCS_IMAGE}:${SHA}" \
+    -t "${DOCS_IMAGE}:latest" \
+    --push docs/
+  echo "    Image pushed: ${DOCS_IMAGE}:${SHA}"
+
+  echo "==> Pulling on server"
+  ssh softlanding "cd /opt/softlanding && docker compose pull docs && docker compose up -d docs"
   echo "    Docs deployed"
 }
 
 deploy_landing() {
-  echo "==> Deploying landing page"
-  rsync -avz --delete \
-    landing/ "softlanding:/opt/softlanding/landing/"
-  echo "    Landing page deployed"
+  echo "==> Building landing image (linux/arm64)"
+  docker buildx build --platform linux/arm64 \
+    -t "${LANDING_IMAGE}:${SHA}" \
+    -t "${LANDING_IMAGE}:latest" \
+    --push landing/
+  echo "    Image pushed: ${LANDING_IMAGE}:${SHA}"
+
+  echo "==> Pulling on server"
+  ssh softlanding "cd /opt/softlanding && docker compose pull landing && docker compose up -d landing"
+  echo "    Landing deployed"
+}
+
+deploy_compose() {
+  echo "==> Deploying docker-compose.yml + Caddyfile to server"
+  scp docker-compose.prod.yml softlanding:/opt/softlanding/docker-compose.yml
+  scp infra/Caddyfile softlanding:/opt/softlanding/Caddyfile
+}
+
+deploy_caddy() {
+  echo "==> Deploying Caddyfile to server"
+  scp infra/Caddyfile softlanding:/opt/softlanding/Caddyfile
+  ssh softlanding "cd /opt/softlanding && docker compose exec caddy caddy reload --config /etc/caddy/Caddyfile"
+  echo "    Caddy reloaded"
 }
 
 case "${COMPONENT}" in
@@ -76,9 +99,10 @@ case "${COMPONENT}" in
   compose)   deploy_compose ;;
   docs)      deploy_docs ;;
   landing)   deploy_landing ;;
+  caddy)     deploy_caddy ;;
   *)
     echo "Unknown component: ${COMPONENT}"
-    echo "Usage: $0 [all|backend|dashboard|compose|docs|landing]"
+    echo "Usage: $0 [all|backend|dashboard|compose|docs|landing|caddy]"
     exit 1
     ;;
 esac

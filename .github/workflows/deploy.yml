@@ -8,6 +8,8 @@ env:
   REGISTRY: ghcr.io
   BACKEND_IMAGE: ghcr.io/sussdorff/soft-landing-backend
   DASHBOARD_IMAGE: ghcr.io/sussdorff/soft-landing-dashboard
+  DOCS_IMAGE: ghcr.io/sussdorff/soft-landing-docs
+  LANDING_IMAGE: ghcr.io/sussdorff/soft-landing-landing
 
 jobs:
   build-and-push:
@@ -58,6 +60,30 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Build and push docs
+        uses: docker/build-push-action@v6
+        with:
+          context: docs
+          platforms: linux/arm64
+          push: true
+          tags: |
+            ${{ env.DOCS_IMAGE }}:${{ github.sha }}
+            ${{ env.DOCS_IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push landing
+        uses: docker/build-push-action@v6
+        with:
+          context: landing
+          platforms: linux/arm64
+          push: true
+          tags: |
+            ${{ env.LANDING_IMAGE }}:${{ github.sha }}
+            ${{ env.LANDING_IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
   deploy:
     needs: build-and-push
     runs-on: ubuntu-latest
@@ -72,9 +98,10 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H 46.224.137.140 >> ~/.ssh/known_hosts
 
-      - name: Deploy docker-compose.prod.yml
+      - name: Deploy docker-compose.yml and Caddyfile
         run: |
           scp docker-compose.prod.yml root@46.224.137.140:/opt/softlanding/docker-compose.yml
+          scp infra/Caddyfile root@46.224.137.140:/opt/softlanding/Caddyfile
 
       - name: Pull and restart containers
         run: |
@@ -84,15 +111,10 @@ jobs:
           docker compose up -d
           EOF
 
-      - name: Deploy docs (rsync)
-        run: |
-          pip install -r docs/requirements.txt -q
-          mkdocs build -f docs/mkdocs.yml
-          rsync -avz --delete docs/site/ root@46.224.137.140:/opt/softlanding/docs/site/
-
       - name: Verify deployment
         run: |
           sleep 10
           curl -sf https://softlanding.sussdorff.de/ || echo "Health check pending"
           curl -sf https://softlanding.sussdorff.de/dashboard/ || echo "Dashboard pending"
           curl -sf https://softlanding.sussdorff.de/docs/ || echo "Docs pending"
+          curl -sf https://get-softlanding.sussdorff.de/ || echo "Landing pending"
