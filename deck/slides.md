@@ -21,9 +21,51 @@ mdc: true
 
 **Passenger app** (KMP) · **Gate agent dashboard** (React) · **Backend** (Python)
 
-<!--
-Cover slide.
--->
+---
+
+# The Problem
+
+When flights break, passengers crowd the gate desk and agents drown in manual rebooking — one passenger at a time, while 200 others wait.
+
+<br>
+
+### No visibility into cascading impact
+
+- Agent approves a seat — but that seat was the last option for three other passengers
+- Denied passengers go to the back of the line and start over
+- No way to see the big picture or prioritize
+
+---
+
+# Soft Landing
+
+An **operational command center** for gate agents backed by a passenger self-service app.
+
+<br>
+
+- **Passengers** get a disruption explanation and choose from AI-generated options (rebook, hotel, ground transport, alt airport)
+- **Preferences stream** into the gate agent's dashboard in real time
+- **Gate agent stays in control** — human-in-the-loop approval for every decision
+- **AI does the heavy lifting** — Gemini generates options and plain-language explanations grounded in live data (flights, maps, search)
+
+---
+
+# How It Works
+
+```mermaid {scale: 0.7}
+graph LR
+    A["Disruption detected"] --> B["Options generated<br/>per passenger"]
+    B --> C["Passenger picks<br/>preference"]
+    C --> D["Wish streams to<br/>gate agent"]
+    D --> E{Approve?}
+    E -->|Yes| F["Confirmed +<br/>next steps"]
+    E -->|No| G["Priority bumped,<br/>new options"]
+    G --> C
+```
+
+<br>
+
+Passenger choice = **wish**, not booking. Gate agent has final say. Denied passengers get escalated priority — they don't go to the back of the line.
 
 ---
 
