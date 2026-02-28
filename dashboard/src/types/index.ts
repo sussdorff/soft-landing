@@ -130,8 +130,10 @@ export interface WSEvent<T = unknown> {
 
 // Dashboard API interface — both mock and real adapters implement this
 export interface DashboardAPI {
+  getDisruptions(): Promise<Disruption[]>;
   getDisruption(id: string): Promise<Disruption>;
   getPassengers(disruptionId: string): Promise<Passenger[]>;
+  getOptions(disruptionId: string): Promise<Record<string, Option[]>>;
   getWishes(disruptionId: string): Promise<Wish[]>;
   getPassengerProfile(passengerId: string): Promise<PassengerProfile>;
   approveWish(wishId: string): Promise<void>;

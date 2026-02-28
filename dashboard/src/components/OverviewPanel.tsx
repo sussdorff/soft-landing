@@ -5,9 +5,11 @@ interface Props {
   disruption: Disruption;
   passengers: Passenger[];
   pendingWishes: Wish[];
+  disruptions: Disruption[];
+  onSelectDisruption: (id: string) => void;
 }
 
-export function OverviewPanel({ disruption, passengers, pendingWishes }: Props) {
+export function OverviewPanel({ disruption, passengers, pendingWishes, disruptions, onSelectDisruption }: Props) {
   const [collapsed, setCollapsed] = useState(false);
 
   const total = passengers.length;
@@ -21,8 +23,40 @@ export function OverviewPanel({ disruption, passengers, pendingWishes }: Props) 
   ).length;
   const connectingPct = affected > 0 ? Math.round((connecting / affected) * 100) : 0;
 
+  const typeColors: Record<string, string> = {
+    cancellation: "bg-accent-red/20 text-accent-red",
+    delay: "bg-accent-amber/20 text-accent-amber",
+    diversion: "bg-accent-blue/20 text-accent-blue",
+  };
+
   return (
-    <div className="bg-surface-800 border border-surface-600 rounded-lg">
+    <div className="space-y-2">
+      {/* Flight selector */}
+      {disruptions.length > 1 && (
+        <div className="flex items-center gap-1.5">
+          <span className="text-[10px] font-mono text-text-muted uppercase tracking-wider mr-1">Flights</span>
+          {disruptions.map((d) => (
+            <button
+              key={d.id}
+              onClick={() => onSelectDisruption(d.id)}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-mono transition-colors cursor-pointer ${
+                d.id === disruption.id
+                  ? "bg-surface-700 text-text-primary border border-surface-500"
+                  : "text-text-muted hover:text-text-secondary hover:bg-surface-800"
+              }`}
+            >
+              <span className={`inline-block px-1.5 py-0.5 text-[9px] font-semibold rounded uppercase ${typeColors[d.type] ?? "bg-surface-600 text-text-muted"}`}>
+                {d.type === "cancellation" ? "CNX" : d.type === "delay" ? "DLY" : "DIV"}
+              </span>
+              <span className="font-semibold">{d.flightNumber}</span>
+              <span className="text-text-muted">{d.origin}→{d.destination}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Disruption detail */}
+      <div className="bg-surface-800 border border-surface-600 rounded-lg">
       {/* Collapsed: compact single-line summary */}
       <button
         onClick={() => setCollapsed(!collapsed)}
@@ -35,7 +69,7 @@ export function OverviewPanel({ disruption, passengers, pendingWishes }: Props) 
         >
           ▶
         </span>
-        <span className="inline-block px-2 py-0.5 text-[10px] font-mono font-semibold rounded bg-accent-red/20 text-accent-red uppercase">
+        <span className={`inline-block px-2 py-0.5 text-[10px] font-mono font-semibold rounded uppercase ${typeColors[disruption.type] ?? "bg-surface-600 text-text-muted"}`}>
           {disruption.type}
         </span>
         <span className="font-mono text-sm font-semibold text-text-primary">
@@ -98,6 +132,7 @@ export function OverviewPanel({ disruption, passengers, pendingWishes }: Props) 
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

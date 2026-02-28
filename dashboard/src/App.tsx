@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Layout } from "./components/Layout";
 import { OverviewPanel } from "./components/OverviewPanel";
 import { FlightOverview } from "./components/FlightOverview";
@@ -6,30 +6,40 @@ import { WishStream } from "./components/WishStream";
 import { PassengerProfile } from "./components/PassengerProfile";
 import { useDisruption } from "./hooks/use-disruption";
 import { useWishes } from "./hooks/use-wishes";
-import { OPTIONS } from "./api/mock-data";
-import type { Option, Wish } from "./types";
-
-// For the hackathon demo, we load a single disruption
-const DISRUPTION_ID = "dis-001";
+import { api } from "./api";
+import type { Disruption, Option, Wish } from "./types";
 
 type Tab = "overview" | "wishes";
 
 function App() {
+  const [disruptions, setDisruptions] = useState<Disruption[]>([]);
+  const [disruptionId, setDisruptionId] = useState<string>("dis-001");
   const { disruption, passengers, loading, error } =
-    useDisruption(DISRUPTION_ID);
+    useDisruption(disruptionId);
   const { wishes, pendingWishes, resolvedWishes, approve, deny, resolveManually } =
-    useWishes(DISRUPTION_ID);
+    useWishes(disruptionId);
   const [activeTab, setActiveTab] = useState<Tab>("overview");
   const [profileId, setProfileId] = useState<string | null>(null);
+  const [optionsRaw, setOptionsRaw] = useState<Record<string, Option[]>>({});
+
+  // Load all disruptions for the flight selector
+  useEffect(() => {
+    api.getDisruptions().then(setDisruptions);
+  }, []);
+
+  // Load options when disruption changes
+  useEffect(() => {
+    api.getOptions(disruptionId).then(setOptionsRaw);
+  }, [disruptionId]);
 
   // Build options map for wish cards and flight overview
   const optionsByPassenger = useMemo(() => {
     const map = new Map<string, Option[]>();
-    for (const [paxId, opts] of Object.entries(OPTIONS)) {
+    for (const [paxId, opts] of Object.entries(optionsRaw)) {
       map.set(paxId, opts);
     }
     return map;
-  }, []);
+  }, [optionsRaw]);
 
   // Build latest wish per passenger (for flight overview)
   const wishesByPassenger = useMemo(() => {
@@ -77,6 +87,8 @@ function App() {
             disruption={disruption}
             passengers={passengers}
             pendingWishes={pendingWishes}
+            disruptions={disruptions}
+            onSelectDisruption={setDisruptionId}
           />
         </div>
 

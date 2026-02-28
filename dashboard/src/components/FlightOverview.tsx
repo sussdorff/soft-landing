@@ -226,6 +226,7 @@ export function FlightOverview({
               onViewProfile={() => onViewProfile(pax.id)}
               onResolve={onResolve}
               disruptedFlight={disruption.flightNumber}
+              disruptionType={disruption.type}
             />
           );
         })}
@@ -244,6 +245,7 @@ function PassengerRow({
   onViewProfile,
   onResolve,
   disruptedFlight,
+  disruptionType,
 }: {
   passenger: Passenger;
   impact: ImpactLevel;
@@ -254,6 +256,7 @@ function PassengerRow({
   onViewProfile: () => void;
   onResolve: (passengerId: string, optionId: string) => Promise<void>;
   disruptedFlight: string;
+  disruptionType: string;
 }) {
   const [resolvingId, setResolvingId] = useState<string | null>(null);
   const impactStyles: Record<ImpactLevel, string> = {
@@ -330,7 +333,11 @@ function PassengerRow({
                 )}
                 <span className="text-text-muted">→</span>
                 {seg.flightNumber === disruptedFlight ? (
-                  <span className="px-1 py-0.5 rounded bg-accent-red/15 text-accent-red line-through">
+                  <span className={`px-1 py-0.5 rounded ${
+                    disruptionType === "cancellation"
+                      ? "bg-accent-red/15 text-accent-red line-through"
+                      : "bg-accent-amber/15 text-accent-amber"
+                  }`}>
                     {seg.flightNumber}
                   </span>
                 ) : (
@@ -393,14 +400,18 @@ function PassengerRow({
                     key={i}
                     className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-mono ${
                       seg.flightNumber === disruptedFlight
-                        ? "bg-accent-red/10 border border-accent-red/30"
+                        ? disruptionType === "cancellation"
+                          ? "bg-accent-red/10 border border-accent-red/30"
+                          : "bg-accent-amber/10 border border-accent-amber/30"
                         : "bg-surface-800"
                     }`}
                   >
                     <span
                       className={
                         seg.flightNumber === disruptedFlight
-                          ? "font-semibold text-accent-red"
+                          ? disruptionType === "cancellation"
+                            ? "font-semibold text-accent-red"
+                            : "font-semibold text-accent-amber"
                           : "text-text-primary"
                       }
                     >
@@ -416,8 +427,12 @@ function PassengerRow({
                       })}
                     </span>
                     {seg.flightNumber === disruptedFlight && (
-                      <span className="text-accent-red font-semibold">
-                        CANCELLED
+                      <span className={
+                        disruptionType === "cancellation"
+                          ? "text-accent-red font-semibold"
+                          : "text-accent-amber font-semibold"
+                      }>
+                        {disruptionType === "cancellation" ? "CANCELLED" : "DELAYED"}
                       </span>
                     )}
                   </div>

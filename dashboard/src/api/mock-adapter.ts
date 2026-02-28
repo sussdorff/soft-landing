@@ -1,8 +1,9 @@
 import type { DashboardAPI, WSEvent, Wish } from "../types";
 import {
-  DISRUPTION,
-  PASSENGERS,
-  WISHES,
+  DISRUPTIONS,
+  PASSENGERS_MAP,
+  OPTIONS_MAP,
+  WISHES_MAP,
   buildPassengerProfile,
 } from "./mock-data";
 
@@ -11,14 +12,18 @@ const delay = (ms = 200) => new Promise((r) => setTimeout(r, ms));
 
 export function createMockAdapter(): DashboardAPI {
   // Mutable copy so approve/deny actually update state
-  const wishes: Wish[] = [...WISHES];
+  const wishesByDisruption: Record<string, Wish[]> = {};
+  for (const [disId, ws] of Object.entries(WISHES_MAP)) {
+    wishesByDisruption[disId] = [...ws];
+  }
+
   const eventHandlers: Set<(event: WSEvent) => void> = new Set();
 
   function emit(event: WSEvent) {
     eventHandlers.forEach((h) => h(event));
   }
 
-  // Simulate a new wish arriving every 15s
+  // Simulate a new wish arriving every 15s (only for dis-001)
   let simInterval: ReturnType<typeof setInterval> | null = null;
   const simPassengers = ["pax-006", "pax-007", "pax-009", "pax-011"];
   let simIndex = 0;
@@ -40,7 +45,8 @@ export function createMockAdapter(): DashboardAPI {
         submittedAt: new Date().toISOString(),
         status: "pending",
       };
-      wishes.push(newWish);
+      if (!wishesByDisruption["dis-001"]) wishesByDisruption["dis-001"] = [];
+      wishesByDisruption["dis-001"].push(newWish);
       emit({
         type: "new_wish",
         timestamp: newWish.submittedAt,
@@ -49,34 +55,52 @@ export function createMockAdapter(): DashboardAPI {
     }, 15000);
   }
 
+  function getAllPassengers() {
+    return Object.values(PASSENGERS_MAP).flat();
+  }
+
+  function getAllWishes() {
+    return Object.values(wishesByDisruption).flat();
+  }
+
   return {
-    async getDisruption() {
+    async getDisruptions() {
       await delay();
-      return DISRUPTION;
+      return DISRUPTIONS;
     },
 
-    async getPassengers() {
+    async getDisruption(id) {
       await delay();
-      // Sort by priority desc, then by name
-      return [...PASSENGERS].sort(
+      const d = DISRUPTIONS.find((d) => d.id === id);
+      if (!d) throw new Error(`Disruption ${id} not found`);
+      return d;
+    },
+
+    async getPassengers(disruptionId) {
+      await delay();
+      const pax = PASSENGERS_MAP[disruptionId] ?? [];
+      return [...pax].sort(
         (a, b) => b.priority - a.priority || a.name.localeCompare(b.name)
       );
     },
 
-    async getWishes() {
+    async getOptions(disruptionId) {
       await delay();
-      // Sort: pending first (by priority desc, then submittedAt asc), then approved/denied
-      const paxMap = new Map(PASSENGERS.map((p) => [p.id, p]));
+      return OPTIONS_MAP[disruptionId] ?? {};
+    },
+
+    async getWishes(disruptionId) {
+      await delay();
+      const wishes = wishesByDisruption[disruptionId] ?? [];
+      const allPax = getAllPassengers();
+      const paxMap = new Map(allPax.map((p) => [p.id, p]));
       return [...wishes].sort((a, b) => {
-        // Pending before resolved
         const aResolved = a.status !== "pending" ? 1 : 0;
         const bResolved = b.status !== "pending" ? 1 : 0;
         if (aResolved !== bResolved) return aResolved - bResolved;
-        // Within pending: higher priority first
         const aPriority = paxMap.get(a.passengerId)?.priority ?? 0;
         const bPriority = paxMap.get(b.passengerId)?.priority ?? 0;
         if (aPriority !== bPriority) return bPriority - aPriority;
-        // Then by submission time
         return a.submittedAt.localeCompare(b.submittedAt);
       });
     },
@@ -88,11 +112,11 @@ export function createMockAdapter(): DashboardAPI {
 
     async approveWish(wishId: string) {
       await delay(400);
-      const wish = wishes.find((w) => w.id === wishId);
+      const wish = getAllWishes().find((w) => w.id === wishId);
       if (wish) {
         wish.status = "approved";
         wish.confirmationDetails = "Approved by gate agent. Booking confirmed.";
-        const pax = PASSENGERS.find((p) => p.id === wish.passengerId);
+        const pax = getAllPassengers().find((p) => p.id === wish.passengerId);
         if (pax) pax.status = "approved";
         emit({
           type: "wish_approved",
@@ -104,11 +128,11 @@ export function createMockAdapter(): DashboardAPI {
 
     async denyWish(wishId: string, reason: string) {
       await delay(400);
-      const wish = wishes.find((w) => w.id === wishId);
+      const wish = getAllWishes().find((w) => w.id === wishId);
       if (wish) {
         wish.status = "denied";
         wish.denialReason = reason;
-        const pax = PASSENGERS.find((p) => p.id === wish.passengerId);
+        const pax = getAllPassengers().find((p) => p.id === wish.passengerId);
         if (pax) {
           pax.status = "denied";
           pax.denialCount += 1;
@@ -134,8 +158,9 @@ export function createMockAdapter(): DashboardAPI {
         status: "approved",
         confirmationDetails: "Manually resolved by gate agent.",
       };
-      wishes.push(newWish);
-      const pax = PASSENGERS.find((p) => p.id === passengerId);
+      if (!wishesByDisruption[disruptionId]) wishesByDisruption[disruptionId] = [];
+      wishesByDisruption[disruptionId].push(newWish);
+      const pax = getAllPassengers().find((p) => p.id === passengerId);
       if (pax) pax.status = "approved";
       emit({
         type: "wish_approved",

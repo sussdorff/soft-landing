@@ -44,6 +44,10 @@ export function createApiAdapter(): DashboardAPI {
   }
 
   return {
+    async getDisruptions() {
+      return fetchJSON(`/disruptions`);
+    },
+
     async getDisruption(id) {
       // Also establish WS connection when we first load a disruption
       connectWS(id);
@@ -52,6 +56,10 @@ export function createApiAdapter(): DashboardAPI {
 
     async getPassengers(disruptionId) {
       return fetchJSON(`/disruptions/${disruptionId}/passengers`);
+    },
+
+    async getOptions(disruptionId) {
+      return fetchJSON(`/disruptions/${disruptionId}/options`);
     },
 
     async getWishes(disruptionId) {
