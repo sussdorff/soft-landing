@@ -37,6 +37,10 @@ Based on organizer hints:
 3. **Solves an internal / operational pain point** — not another consumer price comparison
 4. **Novel angle** — employees, crews, ops, not end-customer booking
 
+### Pitch Framing
+
+Lead with the **gate agent dashboard** as the primary product. The story: "A single gate agent can handle 200 disrupted passengers in minutes instead of hours." The passenger app is the data collection mechanism that *feeds* the operational tool — supporting infrastructure, not the headline. This positions Soft Landing as an **operational tool** (what the jury wants) rather than a consumer app.
+
 ---
 
 ## Stack Decisions

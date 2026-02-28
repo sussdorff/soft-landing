@@ -1,16 +1,18 @@
 # Soft Landing — Passenger Disruption Management
 
-> 2026-02-28 — Dual-view system: passenger app (KMP) + gate agent dashboard + backend agent
+> A single gate agent can handle 200 disrupted passengers in minutes instead of hours.
+
+When flights break, passengers crowd the desk and gate agents drown in manual rebooking. Soft Landing gives the gate agent an **operational command center** that surfaces every affected passenger, their preferences, and the cascading impact of each decision — in real time. Passengers self-serve through a companion app, expressing preferences that stream directly into the agent's dashboard. The agent stays in control with human-in-the-loop approval, while AI handles the heavy lifting of generating options and explaining disruptions.
 
 ---
 
 ## Three Components
 
-1. **Backend / Agent Server** — The brain. Connects to Lufthansa API + Google Grounding. Detects disruptions, generates options, manages state, handles cascading logic.
+1. **Gate Agent Dashboard** (React, WebSocket-based) — The primary product. Operator sees all affected passengers, their wishes, approves/denies, handles conflicts. Human-in-the-loop with final say. Real-time updates as passenger wishes stream in.
 
-2. **Passenger App** (Kotlin Multiplatform — Android, iOS, Web) — Each passenger gets notifications and options. They express preferences. They get informed about what's happening and why.
+2. **Backend / Agent Server** (Python) — The brain. Connects to Lufthansa API + Google Grounding. Detects disruptions, generates options, manages state, handles conflict resolution.
 
-3. **Gate Agent Dashboard** (React, WebSocket-based) — Operator sees all affected passengers, their wishes, approves/denies, handles conflicts. Human-in-the-loop with final say. Real-time updates as passenger wishes stream in.
+3. **Passenger App** (Kotlin Multiplatform — Android, iOS, Web) — The data collection layer. Each passenger gets notifications and options. They express preferences that feed directly into the gate agent's dashboard.
 
 ---
 
@@ -70,7 +72,7 @@
 
 ### 3. Approve / Deny
 - One-click approve
-- On approve: **cascading impact shown** — "Approving seat 14A for Passenger X means Passenger Y's first choice can no longer be fulfilled"
+- On approve: conflicting options for other passengers are automatically marked unavailable and those passengers are notified with updated options
 - Gate agent has **final say** on everything
 - Deny with reason → passenger gets notified with new options
 
@@ -150,9 +152,9 @@
                     │    Backend / Agent       │
                     │                         │
                     │  ┌───────────────────┐  │
-  LH Flight Ops ──►│  │ Disruption Engine │  │
-  API (MQTT)        │  └────────┬──────────┘  │
-                    │           │              │
+  Disruption ──────►│  │ Disruption Engine │  │
+  Simulator         │  └────────┬──────────┘  │
+  (MQTT later)      │           │              │
                     │  ┌────────▼──────────┐  │
                     │  │ Option Generator  │  │
                     │  │                   │  │
@@ -165,24 +167,31 @@
                     │  │  State Manager    │  │
                     │  │  (wishes, status, │  │
                     │  │   priorities,     │  │
-                    │  │   cascading)      │  │
+                    │  │   conflicts)      │  │
                     │  └──┬────────────┬───┘  │
                     └─────┼────────────┼──────┘
                           │            │
-              ┌───────────▼──┐   ┌─────▼───────────┐
-              │ Passenger    │   │ Gate Agent       │
-              │ App (Web)    │   │ Dashboard (Web)  │
-              │              │   │                  │
-              │ - Why it     │   │ - All pax at     │
-              │   happened   │   │   a glance       │
-              │ - Your       │   │ - Wishes stream  │
-              │   options    │   │ - Approve/deny   │
-              │ - Pick       │   │ - Cascading      │
-              │   preference │   │   impact view    │
-              │ - Status     │   │ - Priority queue │
-              │   updates    │   │   (denied pax    │
-              │              │   │    bumped up)    │
-              └──────────────┘   └─────────────────┘
+              ┌───────────▼──────────┐ │
+              │ Gate Agent Dashboard │ │  ◄── PRIMARY PRODUCT
+              │ (React + WebSocket)  │ │
+              │                      │ │
+              │ - All pax at         │ │
+              │   a glance           │ │
+              │ - Wishes stream      │ │
+              │ - Approve/deny       │ │
+              │ - Priority queue     │ │
+              │   (denied pax        │ │
+              │    bumped up)        │ │
+              └──────────────────────┘ │
+                               ┌───────▼──────────┐
+                               │ Passenger App    │
+                               │ (KMP)            │
+                               │                  │
+                               │ - Why it happened│
+                               │ - Your options   │
+                               │ - Pick preference│
+                               │ - Status updates │
+                               └──────────────────┘
 ```
 
 ---
@@ -233,5 +242,5 @@ System generates options per passenger
 - [x] ~~Real-time updates~~ → WebSockets (critical for gate agent dashboard live updates)
 - [x] ~~Gate Agent Dashboard framework~~ → React with WebSockets (reference: Mira project)
 - [x] ~~Backend choice~~ → Python 3.14 (Gemini SDK, agent orchestration)
-- [ ] How to simulate MQTT disruption events for demo?
+- [x] ~~How to simulate MQTT disruption events for demo?~~ → Disruption simulator (CLI/API endpoint) injects mock events; MQTT wired up last if time allows
 - [ ] Mock data: how many passengers per scenario?

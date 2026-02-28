@@ -27,11 +27,11 @@ graph TB
     end
 
     subgraph Clients["Client Applications"]
+        DASH["Gate Agent Dashboard<br/>(React) — Primary Product"]
         PAX["Passenger App<br/>(Kotlin Multiplatform)"]
-        DASH["Gate Agent Dashboard<br/>(React)"]
     end
 
-    LH_OPS -->|MQTT events| DE
+    LH_OPS -.->|MQTT events (later)| DE
     DE -->|disruption context| OG
     LH_SCHED --> OG
     LH_SEATS --> OG
@@ -74,7 +74,7 @@ graph LR
         SM_PAX["Passenger Registry"]
         SM_WISH["Wish Tracker"]
         SM_PRIO["Priority Queue"]
-        SM_CASCADE["Cascade Engine"]
+        SM_CONFLICT["Conflict Notifier"]
     end
 
     DE_NOTIFY --> OG
@@ -87,14 +87,16 @@ graph LR
 
 ```mermaid
 sequenceDiagram
-    participant LH as Lufthansa API
+    participant SIM as Disruption Simulator
     participant DE as Disruption Engine
     participant OG as Option Generator
     participant SM as State Manager
     participant PAX as Passenger App
     participant GA as Gate Agent Dashboard
 
-    LH->>DE: MQTT disruption event<br/>(cancellation/diversion/delay)
+    SIM->>DE: Inject mock disruption<br/>(POST /disruptions/simulate)
+    Note over SIM,DE: MQTT listener can replace<br/>simulator in production
+
     DE->>DE: Parse event, identify affected passengers
     DE->>OG: Generate options for each passenger
 
@@ -107,20 +109,23 @@ sequenceDiagram
     end
 
     OG->>SM: Store options per passenger
-    SM->>PAX: Push notification + options
+    SM->>GA: disruption_created (WebSocket)
+    SM->>PAX: options_available (WebSocket)
     PAX->>PAX: Passenger views explanation + options
-    PAX->>SM: Submit preference (wish)
-    SM->>GA: Wish appears in real-time stream
+    PAX->>SM: Submit preference (POST /passengers/:id/wish)
+    SM->>GA: new_wish (WebSocket, real-time stream)
 
     alt Gate Agent Approves
-        GA->>SM: Approve wish
-        SM->>PAX: Confirmation + next steps
+        GA->>SM: POST /wishes/:id/approve
+        SM->>PAX: wish_confirmed (WebSocket)
+        SM->>SM: Mark conflicting options unavailable
+        SM->>PAX: options_updated (to affected passengers)
     else Gate Agent Denies
-        GA->>SM: Deny wish (with reason)
+        GA->>SM: POST /wishes/:id/deny
         SM->>SM: Bump passenger priority
         SM->>OG: Regenerate options (exclude denied)
         OG->>SM: Updated options
-        SM->>PAX: New options presented
+        SM->>PAX: wish_rejected + new options (WebSocket)
     end
 ```
 
@@ -133,7 +138,8 @@ sequenceDiagram
 ```mermaid
 graph TD
     subgraph Input
-        MQTT["MQTT Listener<br/>LH Flight Ops API"]
+        SIM["Disruption Simulator<br/>─────────────<br/>CLI / API endpoint<br/>Inject mock events"]
+        MQTT["MQTT Listener<br/>LH Flight Ops API<br/>(wire up last)"]
     end
 
     subgraph Processing
@@ -146,17 +152,21 @@ graph TD
         TRIGGER["Trigger Option<br/>Generation per<br/>affected passenger"]
     end
 
-    MQTT --> PARSE --> SCOPE --> ENRICH --> TRIGGER
+    SIM --> PARSE
+    MQTT -.->|later| PARSE
+    PARSE --> SCOPE --> ENRICH --> TRIGGER
 
+    style SIM fill:#b2f2bb
     style MQTT fill:#ffd8a8
     style TRIGGER fill:#b2f2bb
 ```
 
 **Deliverables:**
-- MQTT client subscribing to LH Flight Ops events
+- **Disruption simulator** (Phase 1, day one): CLI command or REST endpoint that injects mock disruption events directly into the engine — enables full-pipeline testing without MQTT
 - Event parser supporting cancellation, diversion, delay types
 - Affected passenger lookup (connecting passengers, destination passengers)
 - Context enrichment via Gemini + Google Search grounding
+- MQTT client subscribing to LH Flight Ops events (Phase 4, if time allows)
 
 ---
 
@@ -205,18 +215,18 @@ graph TD
     end
 
     subgraph Logic["Business Logic"]
-        CASCADE["Cascade Engine<br/>─────────────<br/>• Seat conflict detection<br/>• Impact preview<br/>• Option invalidation"]
-        APPROVE["Approval Handler<br/>─────────────<br/>• Lock resources<br/>• Confirm to passenger<br/>• Update dashboard"]
+        APPROVE["Approval Handler<br/>─────────────<br/>• Mark option taken<br/>• Confirm to passenger<br/>• Update dashboard"]
+        CONFLICT["Conflict Notifier<br/>─────────────<br/>• Post-approval check<br/>• Mark conflicting options<br/>  as unavailable<br/>• Notify affected passengers"]
         DENY["Denial Handler<br/>─────────────<br/>• Bump priority<br/>• Trigger re-generation<br/>• Notify passenger"]
     end
 
-    PAX_REG --> CASCADE
-    WISH --> CASCADE
-    PRIO --> CASCADE
-    CASCADE --> APPROVE
-    CASCADE --> DENY
+    PAX_REG --> APPROVE
+    WISH --> APPROVE
+    PRIO --> APPROVE
+    APPROVE --> CONFLICT
+    CONFLICT --> DENY
 
-    style CASCADE fill:#ffc9c9
+    style CONFLICT fill:#fff3bf
     style APPROVE fill:#b2f2bb
     style DENY fill:#ffc9c9
 ```
@@ -225,12 +235,42 @@ graph TD
 - Passenger state store (in-memory for hackathon, with clear interfaces)
 - Wish tracking with ranked preference support
 - Priority queue with denial-based escalation
-- Cascade engine: when approving one wish, detect conflicts with other passengers' wishes
+- **Simplified conflict handling:** when a wish is approved, mark conflicting options as unavailable and notify affected passengers (no pre-approval impact preview — keep it simple)
 - Approval/denial handlers with real-time notification dispatch
 
 ---
 
-### Module 4: Passenger App (Kotlin Multiplatform)
+### Module 4: Gate Agent Dashboard (React) — Primary Product
+
+```mermaid
+graph TD
+    subgraph Views["Dashboard Views"]
+        V1["Overview Panel<br/>─────────────<br/>• All affected passengers<br/>• At-a-glance stats<br/>• % connection risk"]
+        V2["Wish Stream<br/>─────────────<br/>• Real-time feed<br/>• Sorted by priority<br/>• Denial count badges"]
+        V3["Approval Panel<br/>─────────────<br/>• One-click approve<br/>• Deny with reason<br/>• Conflicts auto-resolved"]
+        V4["Manual Resolution<br/>─────────────<br/>• Passenger profile<br/>• Full history<br/>• Override tools"]
+    end
+
+    WS["WebSocket Connection<br/>to Backend"]
+
+    WS <--> V1
+    WS <--> V2
+    WS <--> V3
+    WS <--> V4
+
+    style WS fill:#ffd8a8
+```
+
+**Deliverables:**
+- React SPA with WebSocket connection for real-time updates
+- Overview panel with disruption stats
+- Live wish stream sorted by priority (denied passengers first)
+- Approval workflow with post-approval conflict notification
+- Manual resolution view for edge cases
+
+---
+
+### Module 5: Passenger App (Kotlin Multiplatform)
 
 ```mermaid
 graph TD
@@ -258,69 +298,143 @@ graph TD
 
 ---
 
-### Module 5: Gate Agent Dashboard (React)
-
-```mermaid
-graph TD
-    subgraph Views["Dashboard Views"]
-        V1["Overview Panel<br/>─────────────<br/>• All affected passengers<br/>• At-a-glance stats<br/>• % connection risk"]
-        V2["Wish Stream<br/>─────────────<br/>• Real-time feed<br/>• Sorted by priority<br/>• Denial count badges"]
-        V3["Approval Panel<br/>─────────────<br/>• One-click approve<br/>• Cascade impact preview<br/>• Deny with reason"]
-        V4["Manual Resolution<br/>─────────────<br/>• Passenger profile<br/>• Full history<br/>• Override tools"]
-    end
-
-    WS["WebSocket Connection<br/>to Backend"]
-
-    WS <--> V1
-    WS <--> V2
-    WS <--> V3
-    WS <--> V4
-
-    style WS fill:#ffd8a8
-```
-
-**Deliverables:**
-- React SPA with WebSocket connection for real-time updates
-- Overview panel with disruption stats
-- Live wish stream sorted by priority (denied passengers first)
-- Approval workflow with cascading impact preview
-- Manual resolution view for edge cases
-
----
-
 ## Implementation Priority
+
+All three components (backend, passenger app, dashboard) are built **in parallel from day one**. The backend starts with hardcoded mock responses so frontends can develop against real API shapes immediately. Real API integrations are swapped in later.
 
 ```mermaid
 gantt
-    title Implementation Roadmap
+    title Implementation Roadmap (Parallel)
     dateFormat X
     axisFormat %s
 
-    section Phase 1 — Core
-    Backend scaffolding + API          :p1, 0, 2
-    State Manager (in-memory)          :p2, 0, 2
-    Mock disruption data               :p3, 0, 1
+    section Phase 1 — Foundation (all teams)
+    API contract + shared types        :p1, 0, 1
+    Disruption simulator (mock trigger):p2, 0, 1
+    Backend scaffolding + mock API     :p3, 0, 2
+    State Manager (in-memory)          :p4, 0, 2
+    Passenger App scaffold + screens   :p5, 0, 2
+    Gate Agent Dashboard scaffold      :p6, 0, 2
 
-    section Phase 2 — Options
-    Flight rebook module               :p4, 2, 4
-    Hotel + next-day module            :p5, 2, 4
-    Ground transport module            :p6, 2, 4
-    Gemini explanation generator       :p7, 2, 4
+    section Phase 2 — Core Features (parallel)
+    Flight rebook module               :p7, 2, 4
+    Hotel + next-day module            :p8, 2, 4
+    Ground transport module            :p9, 2, 4
+    Gemini explanation generator       :p10, 2, 4
+    Dashboard wish stream + approve    :p11, 2, 4
+    Passenger App options + wish flow  :p12, 2, 4
+    WebSocket real-time layer          :p13, 2, 4
 
-    section Phase 3 — Interfaces
-    Passenger App (KMP) screens        :p8, 4, 7
-    Gate Agent Dashboard (React)       :p9, 4, 7
-    WebSocket real-time layer          :p10, 4, 6
+    section Phase 3 — Logic + Polish
+    Priority queue + escalation        :p14, 4, 6
+    Post-approval conflict notify      :p15, 4, 6
+    Approval/denial flow end-to-end    :p16, 4, 6
 
-    section Phase 4 — Logic
-    Priority queue + escalation        :p11, 6, 8
-    Cascade engine                     :p12, 6, 8
-    Approval/denial flow               :p13, 7, 9
-
-    section Phase 5 — Integration
-    MQTT disruption listener           :p14, 8, 9
-    End-to-end demo scenarios          :p15, 9, 10
+    section Phase 4 — Integration + Demo
+    Swap mocks for real LH/Gemini APIs :p17, 6, 8
+    MQTT listener (if time allows)     :p18, 7, 8
+    End-to-end demo scenarios          :p19, 8, 10
 ```
+
+---
+
+## API Contract (Phase 1 — define before building)
+
+The shared data model that all three components agree on. Defined upfront so backend and frontends can be built in parallel against the same shapes.
+
+### Core Types
+
+```mermaid
+classDiagram
+    class Disruption {
+        +string id
+        +string type: cancellation | diversion | delay
+        +string flightNumber
+        +string origin
+        +string destination
+        +string reason
+        +datetime detectedAt
+        +string[] affectedPassengerIds
+    }
+
+    class Passenger {
+        +string id
+        +string name
+        +string bookingRef
+        +Itinerary originalItinerary
+        +string status: unaffected | notified | chose | approved | denied
+        +int denialCount
+        +int priority
+    }
+
+    class Itinerary {
+        +Segment[] segments
+    }
+
+    class Segment {
+        +string flightNumber
+        +string origin
+        +string destination
+        +datetime departure
+        +datetime arrival
+    }
+
+    class Option {
+        +string id
+        +string type: rebook | hotel | ground | alt_airport
+        +string summary
+        +string description
+        +object details
+        +bool available
+    }
+
+    class Wish {
+        +string id
+        +string passengerId
+        +string selectedOptionId
+        +string[] rankedOptionIds
+        +datetime submittedAt
+        +string status: pending | approved | denied
+    }
+
+    Passenger --> Itinerary
+    Itinerary --> Segment
+    Disruption --> Passenger
+    Passenger --> Wish
+    Wish --> Option
+```
+
+### WebSocket Event Types
+
+```mermaid
+graph LR
+    subgraph Server to Dashboard
+        E1["new_wish<br/>─────────────<br/>Passenger submitted<br/>a preference"]
+        E2["wish_approved<br/>─────────────<br/>Gate agent approved,<br/>conflicts resolved"]
+        E3["wish_denied<br/>─────────────<br/>Option no longer<br/>available"]
+        E4["disruption_created<br/>─────────────<br/>New disruption event<br/>with affected passengers"]
+    end
+
+    subgraph Server to Passenger App
+        E5["options_available<br/>─────────────<br/>Your options are ready"]
+        E6["wish_confirmed<br/>─────────────<br/>Approved + next steps"]
+        E7["wish_rejected<br/>─────────────<br/>Denied + new options"]
+        E8["options_updated<br/>─────────────<br/>Some options changed<br/>availability"]
+    end
+```
+
+### REST Endpoints
+
+| Method | Path | Used by | Purpose |
+|--------|------|---------|---------|
+| POST | `/disruptions/simulate` | Simulator | Inject mock disruption |
+| GET | `/disruptions/:id` | Dashboard | Get disruption details |
+| GET | `/disruptions/:id/passengers` | Dashboard | List affected passengers |
+| GET | `/passengers/:id/options` | Passenger App | Get available options |
+| POST | `/passengers/:id/wish` | Passenger App | Submit preference |
+| POST | `/wishes/:id/approve` | Dashboard | Approve a wish |
+| POST | `/wishes/:id/deny` | Dashboard | Deny a wish with reason |
+| GET | `/wishes?disruption_id=X` | Dashboard | Stream of wishes for a disruption |
 
 ---
 
