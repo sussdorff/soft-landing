@@ -30,6 +30,7 @@ export function WishCard({
   const [showDenyInput, setShowDenyInput] = useState(false);
   const [denyReason, setDenyReason] = useState("");
   const [acting, setActing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   if (!passenger) return null;
 
@@ -54,20 +55,39 @@ export function WishCard({
   };
 
   const handleApprove = async () => {
+    setError(null);
     setActing(true);
-    await onApprove(wish.id);
-    setActing(false);
+    try {
+      await onApprove(wish.id);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Approval failed";
+      if (msg.includes("409")) {
+        setError("Option no longer available");
+      } else {
+        setError(msg);
+      }
+    } finally {
+      setActing(false);
+    }
   };
 
   const handleDeny = async () => {
     if (!denyReason.trim()) return;
+    setError(null);
     setActing(true);
-    await onDeny(wish.id, denyReason);
-    setActing(false);
-    setShowDenyInput(false);
+    try {
+      await onDeny(wish.id, denyReason);
+      setShowDenyInput(false);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Denial failed";
+      setError(msg);
+    } finally {
+      setActing(false);
+    }
   };
 
   const isPending = wish.status === "pending";
+  const optionUnavailable = selectedOption && !selectedOption.available;
 
   return (
     <div
@@ -156,15 +176,33 @@ export function WishCard({
         </div>
       )}
 
+      {/* Error message */}
+      {error && (
+        <div className="text-xs text-accent-amber ml-1 mb-2 flex items-center gap-2">
+          <span>{error}</span>
+          <button
+            onClick={() => setError(null)}
+            className="text-text-muted hover:text-text-primary text-[10px] cursor-pointer"
+          >
+            dismiss
+          </button>
+        </div>
+      )}
+
       {/* Action buttons (only for pending) */}
       {isPending && (
         <div className="flex items-center gap-3 mt-3 pt-3 border-t border-surface-600/50">
           <button
             onClick={handleApprove}
-            disabled={acting}
-            className="px-6 py-3 text-sm font-bold rounded-md bg-accent-green text-surface-900 hover:brightness-110 hover:shadow-[0_0_12px_rgba(34,197,94,0.4)] active:scale-95 transition-all disabled:opacity-50 cursor-pointer"
+            disabled={acting || !!optionUnavailable}
+            title={optionUnavailable ? "Option is no longer available" : undefined}
+            className={`px-6 py-3 text-sm font-bold rounded-md transition-all cursor-pointer ${
+              optionUnavailable
+                ? "bg-surface-600 text-text-muted cursor-not-allowed"
+                : "bg-accent-green text-surface-900 hover:brightness-110 hover:shadow-[0_0_12px_rgba(34,197,94,0.4)] active:scale-95 disabled:opacity-50"
+            }`}
           >
-            {acting ? "..." : "APPROVE"}
+            {acting ? "..." : optionUnavailable ? "UNAVAILABLE" : "APPROVE"}
           </button>
 
           {!showDenyInput ? (
