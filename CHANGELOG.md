@@ -9,5 +9,32 @@ and this project uses [CalVer](https://calver.org/) versioning (YYYY.0M.MICRO).
 
 ### Added
 
-- **Planning docs**: Initial research, tech stack, and pivot document
-- **Beads**: Issue tracking initialized
+- **backend**: Scaffold FastAPI project with mock API, LH client, and Gemini grounding
+
+### Documentation
+
+- Initial planning documents for SoftLanding
+- Add beads setup guide, CalVer config, and changelog
+- Add Gemini CLI and multi-agent setup instructions to beads guide
+- Update tech stack — KMP passenger app, React dashboard, Python backend
+- Rename to Soft Landing, update Gemini to 3.0, add architecture doc
+- Apply architecture review — parallel roadmap, simplified cascade, simulator-first, gate-agent framing, API contract
+- Add Slidev architecture deck
+- Extend API contract with WS paths, option detail types, and full REST endpoints
+- Record architecture decisions, create monorepo structure
+- Add infrastructure section to README
+
+### Fixed
+
+- Resolve Mermaid parse error in architecture diagram
+
+### Maintenance
+
+- Initialize beads issue tracking
+- Add shared configuration template (.env.example)
+- Create 6 epics with 25 subtasks, switch beads to JSONL mode
+
+### Infra
+
+- Add Hetzner VPS setup with Caddy, Docker, Python 3.14
+
