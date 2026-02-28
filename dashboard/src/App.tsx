@@ -34,12 +34,16 @@ function App() {
 
   // Load all disruptions for the flight selector, auto-select first
   useEffect(() => {
-    api.getDisruptions().then((ds) => {
-      setDisruptions(ds);
-      if (!disruptionId && ds.length > 0) {
-        setDisruptionId(ds[0].id);
-      }
-    });
+    api.getDisruptions()
+      .then((ds) => {
+        setDisruptions(ds);
+        if (!disruptionId && ds.length > 0) {
+          setDisruptionId(ds[0].id);
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to load disruptions:", err);
+      });
   }, []);
 
   // Load options when disruption changes
@@ -112,14 +116,14 @@ function App() {
     return map;
   }, [wishes]);
 
-  if (loading) {
+  if (!disruptionId || loading) {
     return (
       <Layout>
         <div className="flex items-center justify-center h-full text-text-muted">
           <div className="flex items-center gap-3">
             <div className="w-2 h-2 rounded-full bg-accent-blue animate-pulse" />
             <span className="font-mono text-sm">
-              Connecting to operations...
+              {!disruptionId ? "Loading disruptions..." : "Connecting to operations..."}
             </span>
           </div>
         </div>
