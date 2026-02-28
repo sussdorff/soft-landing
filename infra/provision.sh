@@ -96,12 +96,8 @@ mkdir -p /opt/softlanding/{backend,dashboard,passenger-app,docs/site}
 echo "==> Writing Caddyfile"
 cat > /etc/caddy/Caddyfile << CADDYFILE
 ${DOMAIN} {
-    # CORS headers for mobile apps
-    header {
-        Access-Control-Allow-Origin *
-        Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-        Access-Control-Allow-Headers "Content-Type, Authorization"
-    }
+    # CORS is handled by FastAPI middleware — do NOT add headers here
+    # (duplicate Access-Control-Allow-Origin causes browsers to reject requests)
 
     # Redirect /docs to /docs/
     redir /docs /docs/ 308
