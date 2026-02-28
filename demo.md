@@ -29,7 +29,7 @@ Dashboard + mobile app side by side.
 
 - **Landing page:** https://get-softlanding.sussdorff.de
 - **Dashboard:** https://softlanding.sussdorff.de/dashboard/
-- **Slides (Gamma):** https://gamma.app/docs/lq8jrn86mefeg6k
+- **Slides (Gamma):** https://gamma.app/docs/tsvykh6maqt3fzu
 
 ## Team
 
