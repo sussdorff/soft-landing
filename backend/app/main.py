@@ -193,6 +193,11 @@ async def simulate_disruption(req: SimulateRequest, request: Request):
         async with async_session() as seed_session:
             dis_id = await scenario_diversion.seed(seed_session)
         origin = "NUE"  # Passengers diverted to Nuremberg
+    elif req.scenario == "delay":
+        from app.seeds import scenario_delay
+        async with async_session() as seed_session:
+            dis_id = await scenario_delay.seed(seed_session)
+        origin = "MUC"
     else:
         async with async_session() as seed_session:
             dis_id = await scenario_snowstorm.seed(seed_session)

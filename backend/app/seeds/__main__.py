@@ -4,6 +4,7 @@ Usage:
     uv run python -m app.seeds                    # seed all scenarios
     uv run python -m app.seeds snowstorm          # just scenario 2
     uv run python -m app.seeds diversion          # just scenario 1
+    uv run python -m app.seeds delay              # just scenario 3
     uv run python -m app.seeds --reset            # drop + recreate tables first
 """
 
@@ -11,7 +12,7 @@ import asyncio
 import sys
 
 from app.db.engine import async_session, drop_db, init_db
-from app.seeds import scenario_diversion, scenario_snowstorm
+from app.seeds import scenario_delay, scenario_diversion, scenario_snowstorm
 
 
 async def main() -> None:
@@ -25,7 +26,7 @@ async def main() -> None:
     print("Creating tables...")
     await init_db()
 
-    scenarios = args or {"snowstorm", "diversion"}
+    scenarios = args or {"snowstorm", "diversion", "delay"}
 
     async with async_session() as session:
         if "snowstorm" in scenarios:
@@ -35,6 +36,10 @@ async def main() -> None:
         if "diversion" in scenarios:
             dis_id = await scenario_diversion.seed(session)
             print(f"Seeded diversion scenario: {dis_id} (30 passengers, 1 flight)")
+
+        if "delay" in scenarios:
+            dis_id = await scenario_delay.seed(session)
+            print(f"Seeded delay scenario: {dis_id} (40 passengers, 1 flight)")
 
     print("Done.")
 
