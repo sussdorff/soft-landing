@@ -15,6 +15,8 @@ const OPTION_TYPE_ICONS: Record<string, string> = {
   hotel: "🏨",
   ground: "🚄",
   alt_airport: "↗",
+  lounge: "🛋",
+  voucher: "🎫",
 };
 
 export function WishCard({

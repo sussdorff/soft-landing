@@ -24,11 +24,12 @@ from app.models import (
     BookingClass,
     DisruptionType,
     LoyaltyTier,
+    RebookCandidate,
+    compute_service_level,
 )
 from app.ports.flight_data import FlightDataPort
 from app.ports.grounding import GroundingPort
 from app.ports.repositories import OptionRepository
-from app.models import compute_service_level
 
 if TYPE_CHECKING:
     from app.models import ServiceLevel
@@ -66,6 +67,7 @@ class OptionGenerator:
         disruption_type: DisruptionType,
         destination: str,
         *,
+        origin: str = "MUC",
         loyalty_tier: LoyaltyTier = LoyaltyTier.NONE,
         booking_class: BookingClass = BookingClass.Y,
     ) -> list[str]:
@@ -82,21 +84,22 @@ class OptionGenerator:
 
         # 1. Rebook
         opt_id = await self._add_rebook_option(
-            passenger_id, destination, base_time, svc, loyalty_tier,
+            passenger_id, origin, destination, base_time, svc, loyalty_tier,
+            booking_class,
         )
         if opt_id:
             option_ids.append(opt_id)
 
         # 2. Hotel
         opt_id = await self._add_hotel_option(
-            passenger_id, destination, base_time, svc,
+            passenger_id, origin, destination, base_time, svc,
         )
         if opt_id:
             option_ids.append(opt_id)
 
         # 3. Ground transport
         opt_id = await self._add_ground_option(
-            passenger_id, destination, base_time, svc, loyalty_tier,
+            passenger_id, origin, destination, base_time, svc, loyalty_tier,
         )
         if opt_id:
             option_ids.append(opt_id)
@@ -111,19 +114,100 @@ class OptionGenerator:
 
         # 5. Lounge access (if eligible)
         opt_id = await self._add_lounge_option(
-            passenger_id, base_time, svc, "MUC",
+            passenger_id, base_time, svc, origin,
         )
         if opt_id:
             option_ids.append(opt_id)
 
         # 6. Meal voucher (if no lounge access)
         opt_id = await self._add_voucher_option(
-            passenger_id, base_time, svc, "MUC",
+            passenger_id, base_time, svc, origin,
         )
         if opt_id:
             option_ids.append(opt_id)
 
         return option_ids
+
+    # ------------------------------------------------------------------
+    # Rebook candidate search (reusable, also used by API endpoint)
+    # ------------------------------------------------------------------
+
+    async def search_rebook_candidates(
+        self,
+        origin: str,
+        destination: str,
+        earliest: datetime,
+        booking_class: BookingClass = BookingClass.Y,
+        loyalty_tier: LoyaltyTier = LoyaltyTier.NONE,
+    ) -> list[RebookCandidate]:
+        """Search for rebook flight candidates.
+
+        Returns a list of candidates sorted by departure time, with
+        cancelled flights filtered out and seat availability checked
+        for the first 3 results.
+        """
+        dest = destination.upper().strip()
+        date_str = earliest.strftime("%Y-%m-%d")
+
+        # 1. Fetch LH schedules
+        raw = await self._flight_data.get_schedules(origin, dest, date_str)
+        # Tuples: (flight_code, dep_airport, arr_airport, dep_hour, dep_minute)
+        tuples = self._parse_schedule_candidates(raw, origin, dest)
+
+        # Tag each with source
+        candidates: list[tuple[str, str, str, int, int, str]] = [
+            (*t, "lh_group") for t in tuples
+        ]
+
+        # 2. Expand scope based on service level
+        svc = compute_service_level(loyalty_tier, booking_class)
+        if svc.rebooking_scope in ("star_alliance", "any_airline"):
+            for t in get_star_alliance_flights().get(dest, []):
+                candidates.append((*t, "star_alliance"))
+        if svc.rebooking_scope == "any_airline":
+            for t in get_any_airline_flights().get(dest, []):
+                candidates.append((*t, "any_airline"))
+
+        # 3. Sort by departure time
+        candidates.sort(key=lambda c: (c[3], c[4]))
+
+        # 4. Filter by earliest time
+        if earliest.hour != 0 or earliest.minute != 0:
+            candidates = [
+                c for c in candidates
+                if (c[3], c[4]) >= (earliest.hour, earliest.minute)
+            ]
+
+        if not candidates:
+            return []
+
+        # 5. Filter cancelled flights (operates on 5-tuple, strip source)
+        tuples_only = [(c[0], c[1], c[2], c[3], c[4]) for c in candidates]
+        source_map = {(c[0], c[3], c[4]): c[5] for c in candidates}
+        filtered = await self._filter_cancelled(tuples_only, date_str)
+
+        # 6. Check seat availability for first 3
+        results: list[RebookCandidate] = []
+        for i, t in enumerate(filtered):
+            seat_available: bool | None = None
+            if i < 3:
+                seat_data = await self._flight_data.get_seat_map(
+                    t[0], t[1], t[2], date_str, "M",
+                )
+                seat_available = bool(seat_data)
+
+            source = source_map.get((t[0], t[3], t[4]), "lh_group")
+            results.append(RebookCandidate(
+                flight_number=t[0],
+                origin=t[1],
+                destination=t[2],
+                departure_hour=t[3],
+                departure_minute=t[4],
+                seat_available=seat_available,
+                source=source,
+            ))
+
+        return results
 
     # ------------------------------------------------------------------
     # Description enrichment helper
@@ -154,60 +238,50 @@ class OptionGenerator:
     async def _add_rebook_option(
         self,
         passenger_id: str,
+        origin: str,
         destination: str,
         base_time: datetime,
         svc: ServiceLevel,
         loyalty_tier: LoyaltyTier,
+        booking_class: BookingClass = BookingClass.Y,
     ) -> str | None:
-        next_day = base_time + timedelta(days=1)
-        dest = destination.upper().strip()
-        next_day_str = next_day.strftime("%Y-%m-%d")
-
-        # Fetch schedules through the flight data port
-        candidates = self._parse_schedule_candidates(
-            await self._flight_data.get_schedules("MUC", dest, next_day_str),
-            "MUC", dest,
+        next_day = (base_time + timedelta(days=1)).replace(
+            hour=0, minute=0, second=0, microsecond=0,
         )
+        orig = origin.upper().strip()
 
-        # Expand scope for Star Alliance / any-airline tiers
-        if svc.rebooking_scope in ("star_alliance", "any_airline"):
-            candidates.extend(get_star_alliance_flights().get(dest, []))
-
-        if svc.rebooking_scope == "any_airline":
-            candidates.extend(get_any_airline_flights().get(dest, []))
+        candidates = await self.search_rebook_candidates(
+            origin=orig,
+            destination=destination,
+            earliest=next_day,
+            booking_class=booking_class,
+            loyalty_tier=loyalty_tier,
+        )
 
         scope_note = self._rebooking_scope_note(svc, loyalty_tier)
         upgrade_note = ""
         if svc.upgrade_eligible:
             upgrade_note = " Upgrade to higher cabin possible if available."
 
-        # Filter out cancelled flights via flight status check
         if candidates:
-            candidates.sort(key=lambda t: (t[3], t[4]))
-            candidates = await self._filter_cancelled(candidates, next_day_str)
-
-        if candidates:
-            tpl = candidates[0]
+            best = candidates[0]
             dep = next_day.replace(
-                hour=tpl[3], minute=tpl[4], second=0, microsecond=0,
+                hour=best.departure_hour, minute=best.departure_minute,
+                second=0, microsecond=0,
             )
             arr = dep + timedelta(hours=1, minutes=30)
-
-            # Check seat availability via Seat Maps API
-            seat_data = await self._flight_data.get_seat_map(
-                tpl[0], tpl[1], tpl[2], next_day_str, "M",
-            )
-            seat_available = bool(seat_data)
+            seat_available = best.seat_available if best.seat_available is not None else True
 
             details_json = {
-                "flight_number": tpl[0],
-                "origin": tpl[1],
-                "destination": tpl[2],
+                "flight_number": best.flight_number,
+                "origin": best.origin,
+                "destination": best.destination,
                 "departure": dep.isoformat(),
                 "seat_available": seat_available,
             }
             fallback_desc = (
-                f"Next available flight {tpl[0]} {tpl[1]}-{tpl[2]} tomorrow. "
+                f"Next available flight {best.flight_number} "
+                f"{best.origin}-{best.destination} tomorrow. "
                 f"{scope_note}{upgrade_note}"
             ).strip()
             from app.models import RebookDetails
@@ -216,7 +290,8 @@ class OptionGenerator:
             return await self._option_repo.create_option(
                 passenger_id=passenger_id,
                 option_type="rebook",
-                summary=f"Rebook {tpl[0]} tomorrow {tpl[3]:02d}:{tpl[4]:02d}",
+                summary=f"Rebook {best.flight_number} tomorrow "
+                        f"{best.departure_hour:02d}:{best.departure_minute:02d}",
                 description=description,
                 details=RebookDetails(**details_json),
                 available=True,
@@ -228,7 +303,7 @@ class OptionGenerator:
         arr = dep + timedelta(hours=2)
         details_json = {
             "flight_number": "LHXXXX",
-            "origin": "MUC",
+            "origin": orig,
             "destination": destination,
             "departure": dep.isoformat(),
             "seat_available": True,
@@ -340,6 +415,7 @@ class OptionGenerator:
     async def _add_hotel_option(
         self,
         passenger_id: str,
+        origin: str,
         destination: str,
         base_time: datetime,
         svc: ServiceLevel,
@@ -347,7 +423,7 @@ class OptionGenerator:
         next_day = base_time + timedelta(days=1)
         next_flight_dep = next_day.replace(hour=7, minute=0, second=0, microsecond=0)
 
-        hotels = await self._grounding.find_nearby_hotels("MUC")
+        hotels = await self._grounding.find_nearby_hotels(origin)
         best = self._rank_hotels(hotels, svc)
 
         if best:
@@ -446,21 +522,23 @@ class OptionGenerator:
     async def _add_ground_option(
         self,
         passenger_id: str,
+        origin: str,
         destination: str,
         base_time: datetime,
         svc: ServiceLevel,
         loyalty_tier: LoyaltyTier,
     ) -> str | None:
         dest = destination.upper().strip()
+        orig = origin.upper().strip()
 
         # HON / Senator: offer taxi/limousine regardless of destination
         if svc.transport_mode in ("limousine", "taxi"):
             return await self._add_premium_ground(
-                passenger_id, dest, base_time, svc, loyalty_tier,
+                passenger_id, orig, dest, base_time, svc, loyalty_tier,
             )
 
         # Standard passengers: query grounding port for transport options
-        options = await self._grounding.find_ground_transport("MUC", dest)
+        options = await self._grounding.find_ground_transport(orig, dest)
         if options:
             best = options[0]
             ground_dep = base_time + timedelta(hours=2)
@@ -507,6 +585,7 @@ class OptionGenerator:
     async def _add_premium_ground(
         self,
         passenger_id: str,
+        origin: str,
         destination: str,
         base_time: datetime,
         svc: ServiceLevel,
@@ -522,7 +601,7 @@ class OptionGenerator:
             cost_note = "Taxi voucher provided."
 
         # Check grounding port for travel time estimate
-        transport = await self._grounding.find_ground_transport("MUC", destination)
+        transport = await self._grounding.find_ground_transport(origin, destination)
         if transport:
             hours = self._parse_duration_hours(transport[0].duration)
         else:

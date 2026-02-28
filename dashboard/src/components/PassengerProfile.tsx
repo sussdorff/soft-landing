@@ -12,6 +12,8 @@ const OPTION_TYPE_LABELS: Record<string, string> = {
   hotel: "Hotel + Next Day",
   ground: "Ground Transport",
   alt_airport: "Alt. Airport Route",
+  lounge: "Lounge Access",
+  voucher: "Meal Voucher",
 };
 
 export function PassengerProfile({ passengerId, onClose }: Props) {

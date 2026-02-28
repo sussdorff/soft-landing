@@ -47,6 +47,7 @@ class OptionGeneratorPort(Protocol):
         disruption_type: DisruptionType,
         destination: str,
         *,
+        origin: str = "MUC",
         loyalty_tier: LoyaltyTier = LoyaltyTier.NONE,
         booking_class: BookingClass = BookingClass.Y,
     ) -> list[str]: ...
@@ -134,6 +135,7 @@ class DisruptionEngine:
                 pax.id,
                 dtype,
                 destination,
+                origin=origin,
                 loyalty_tier=pax.loyalty_tier,
                 booking_class=pax.booking_class,
             )

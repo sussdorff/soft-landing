@@ -45,7 +45,7 @@ export interface Disruption {
   affectedPassengerIds: string[];
 }
 
-export type OptionType = "rebook" | "hotel" | "ground" | "alt_airport";
+export type OptionType = "rebook" | "hotel" | "ground" | "alt_airport" | "lounge" | "voucher";
 
 export interface RebookDetails {
   flightNumber: string;
@@ -78,11 +78,31 @@ export interface AltAirportDetails {
   totalArrival: string;
 }
 
+export interface LoungeDetails {
+  loungeName: string;
+  terminal: string;
+  location: string;
+  accessType: string;
+  amenities: string[];
+  openingHours: string;
+  showerAvailable: boolean;
+  sleepingRooms: boolean;
+}
+
+export interface VoucherDetails {
+  voucherType: string;
+  amountEur: number;
+  validUntil: string;
+  acceptedAt: string[];
+}
+
 export type OptionDetails =
   | RebookDetails
   | HotelDetails
   | GroundTransportDetails
-  | AltAirportDetails;
+  | AltAirportDetails
+  | LoungeDetails
+  | VoucherDetails;
 
 export interface Option {
   id: string;

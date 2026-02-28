@@ -4,7 +4,7 @@ import logging
 import os
 from contextlib import asynccontextmanager
 from dataclasses import asdict
-from datetime import date as date_cls
+from datetime import UTC, date as date_cls, datetime
 
 from dotenv import load_dotenv
 
@@ -24,11 +24,21 @@ from app.adapters.repositories import (
 from app.adapters.static_data import StaticDataAdapter
 from app.adapters.websocket_notification import WebSocketNotificationAdapter
 from app.db.engine import async_session, init_db
-from app.models import DenyRequest, IngestEventRequest, ResolveRequest, SimulateRequest, WishRequest
+from app.models import (
+    BookingClass,
+    DenyRequest,
+    IngestEventRequest,
+    LoyaltyTier,
+    ResolveRequest,
+    SimulateRequest,
+    WishRequest,
+)
 from app.ports.flight_data import FlightDataPort
 from app.ports.grounding import GroundingPort
+from app.ports.repositories import DisruptionRepository
 from app.seeds import scenario_snowstorm
 from app.services.disruption_engine import DisruptionEngine
+from app.services.option_generator import OptionGenerator
 from app.services.gemini import GeminiGroundingService
 from app.services.lufthansa import LufthansaClient
 from app.services.state_manager import StateManager
@@ -77,7 +87,6 @@ async def lifespan(app: FastAPI):
     wish_repo = SqlWishRepository(async_session)
 
     # OptionGenerator with injected ports
-    from app.services.option_generator import OptionGenerator
     option_generator = OptionGenerator(flight_data, grounding, option_repo)
 
     # Disruption engine
@@ -107,18 +116,47 @@ async def lifespan(app: FastAPI):
     app.state.option_repo = option_repo
     app.state.wish_repo = wish_repo
     app.state.state_manager = state_manager
+    app.state.option_generator = option_generator
     app.state.lh_client = lh_client
 
     # Auto-seed snowstorm scenario if DB is empty
     if await disruption_repo.is_empty():
         async with async_session() as session:
             await scenario_snowstorm.seed(session)
+        await _generate_options_for_disruption(
+            disruption_repo, option_generator, "MUC",
+        )
 
     yield
 
     # Cleanup
     if lh_client:
         await lh_client.close()
+
+
+async def _generate_options_for_disruption(
+    disruption_repo: DisruptionRepository,
+    option_generator: OptionGenerator,
+    origin: str,
+) -> None:
+    """Generate options for all passengers linked to disruptions in the DB.
+
+    Called after seeding to run the full OptionGenerator pipeline
+    (LH API / Gemini if configured, static fallback otherwise).
+    """
+    disruptions = await disruption_repo.list_disruptions()
+    for dis in disruptions:
+        pax_list = await disruption_repo.get_disruption_passengers(dis.id)
+        for pax in pax_list:
+            await option_generator.generate_options(
+                dis.id,
+                pax.id,
+                dis.type,
+                dis.destination,
+                origin=origin,
+                loyalty_tier=pax.loyalty_tier,
+                booking_class=pax.booking_class,
+            )
 
 
 app = FastAPI(
@@ -149,14 +187,23 @@ async def simulate_disruption(req: SimulateRequest, request: Request):
     await drop_db()
     await init_db()
 
-    async with async_session() as seed_session:
-        if req.scenario == "diversion":
-            from app.seeds import scenario_diversion
+    # Seed passengers, segments, and disruption record (no options)
+    if req.scenario == "diversion":
+        from app.seeds import scenario_diversion
+        async with async_session() as seed_session:
             dis_id = await scenario_diversion.seed(seed_session)
-        else:
+        origin = "NUE"  # Passengers diverted to Nuremberg
+    else:
+        async with async_session() as seed_session:
             dis_id = await scenario_snowstorm.seed(seed_session)
+        origin = "MUC"
 
-    dis = await request.app.state.disruption_repo.get_disruption(dis_id)
+    # Generate options via OptionGenerator (uses LH API / Gemini if configured)
+    disruption_repo = request.app.state.disruption_repo
+    option_generator = request.app.state.option_generator
+    await _generate_options_for_disruption(disruption_repo, option_generator, origin)
+
+    dis = await disruption_repo.get_disruption(dis_id)
     if not dis:
         raise HTTPException(500, "Failed to seed scenario")
 
@@ -438,6 +485,43 @@ async def get_flight_context(request: Request, flight_number: str, date: str = Q
     flight_date = date or date_cls.today().isoformat()
     ctx = await grounding.get_flight_context(flight_number, flight_date)
     return asdict(ctx)
+
+
+# --- Rebook options search ---
+
+@app.get("/rebook-options")
+async def search_rebook_options(
+    request: Request,
+    origin: str = Query(..., min_length=3, max_length=3),
+    destination: str = Query(..., min_length=3, max_length=3),
+    earliest: str = Query(None),
+    booking_class: BookingClass = Query(BookingClass.Y),
+    loyalty_tier: LoyaltyTier = Query(LoyaltyTier.NONE),
+):
+    """Search for rebook flight candidates.
+
+    Returns flights sorted by departure time with seat availability
+    checked for the first 3 results.
+    """
+    if earliest:
+        try:
+            earliest_dt = datetime.fromisoformat(earliest)
+            if earliest_dt.tzinfo is None:
+                earliest_dt = earliest_dt.replace(tzinfo=UTC)
+        except ValueError:
+            raise HTTPException(400, f"Invalid earliest datetime: {earliest}")
+    else:
+        earliest_dt = datetime.now(tz=UTC)
+
+    gen = request.app.state.option_generator
+    candidates = await gen.search_rebook_candidates(
+        origin=origin.upper(),
+        destination=destination.upper(),
+        earliest=earliest_dt,
+        booking_class=booking_class,
+        loyalty_tier=loyalty_tier,
+    )
+    return [c.model_dump(by_alias=True, mode="json") for c in candidates]
 
 
 # --- WebSocket ---

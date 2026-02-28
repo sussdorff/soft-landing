@@ -16,6 +16,8 @@ const OPTION_TYPE_ICONS: Record<string, string> = {
   hotel: "hotel",
   ground: "train",
   alt_airport: "route",
+  lounge: "armchair",
+  voucher: "ticket",
 };
 
 const OPTION_TYPE_LABELS: Record<string, string> = {
@@ -23,6 +25,8 @@ const OPTION_TYPE_LABELS: Record<string, string> = {
   hotel: "Hotel + Flight",
   ground: "Ground Transport",
   alt_airport: "Alt. Route",
+  lounge: "Lounge Access",
+  voucher: "Meal Voucher",
 };
 
 type ImpactLevel = "disrupted" | "connection_at_risk" | "resolved" | "on_track";
@@ -582,6 +586,8 @@ function OptionTypeIcon({ type }: { type: string }) {
     hotel: "bg-accent-amber/15 text-accent-amber",
     ground: "bg-accent-green/15 text-accent-green",
     alt_airport: "bg-accent-purple/15 text-accent-purple",
+    lounge: "bg-accent-cyan/15 text-accent-cyan",
+    voucher: "bg-accent-orange/15 text-accent-orange",
   };
 
   return (

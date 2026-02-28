@@ -251,6 +251,17 @@ class VoucherDetails(CamelModel):
 type OptionDetails = RebookDetails | HotelDetails | GroundTransportDetails | AltAirportDetails | LoungeDetails | VoucherDetails
 
 
+class RebookCandidate(CamelModel):
+    """A single flight option for rebooking a disrupted passenger."""
+    flight_number: str
+    origin: str
+    destination: str
+    departure_hour: int
+    departure_minute: int
+    seat_available: bool | None = None  # None = not checked yet
+    source: str = "lh_group"  # "lh_group", "star_alliance", "any_airline"
+
+
 class Option(CamelModel):
     id: str = Field(default_factory=lambda: uuid4().hex[:8])
     type: OptionType

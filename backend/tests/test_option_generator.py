@@ -9,6 +9,7 @@ from app.models import (
     BookingClass,
     DisruptionType,
     LoyaltyTier,
+    RebookCandidate,
 )
 from app.ports.flight_data import FlightDataPort
 from app.ports.grounding import GroundingPort
@@ -476,3 +477,181 @@ class TestParseBestLounge:
     def test_no_lounges_returns_none(self):
         data = {"LoungeResource": {"Lounges": {"Lounge": []}}}
         assert OptionGenerator._parse_best_lounge(data, "senator") is None
+
+
+def _multi_schedule_response() -> dict:
+    """Schedule response with 4 flights for testing sort/filter."""
+    return {
+        "ScheduleResource": {
+            "Schedule": [
+                {
+                    "Flight": {
+                        "MarketingCarrier": {"AirlineID": "LH", "FlightNumber": "104"},
+                        "Departure": {
+                            "AirportCode": "MUC",
+                            "ScheduledTimeLocal": {"DateTime": "2026-03-01T14:45"},
+                        },
+                        "Arrival": {"AirportCode": "FRA"},
+                    },
+                },
+                {
+                    "Flight": {
+                        "MarketingCarrier": {"AirlineID": "LH", "FlightNumber": "98"},
+                        "Departure": {
+                            "AirportCode": "MUC",
+                            "ScheduledTimeLocal": {"DateTime": "2026-03-01T06:30"},
+                        },
+                        "Arrival": {"AirportCode": "FRA"},
+                    },
+                },
+                {
+                    "Flight": {
+                        "MarketingCarrier": {"AirlineID": "LH", "FlightNumber": "100"},
+                        "Departure": {
+                            "AirportCode": "MUC",
+                            "ScheduledTimeLocal": {"DateTime": "2026-03-01T08:00"},
+                        },
+                        "Arrival": {"AirportCode": "FRA"},
+                    },
+                },
+                {
+                    "Flight": {
+                        "MarketingCarrier": {"AirlineID": "LH", "FlightNumber": "102"},
+                        "Departure": {
+                            "AirportCode": "MUC",
+                            "ScheduledTimeLocal": {"DateTime": "2026-03-01T10:15"},
+                        },
+                        "Arrival": {"AirportCode": "FRA"},
+                    },
+                },
+            ],
+        },
+    }
+
+
+class TestSearchRebookCandidates:
+    """Tests for the extracted search_rebook_candidates method."""
+
+    async def test_returns_candidates_from_schedules(
+        self, mock_flight_data, mock_grounding, mock_option_repo,
+    ):
+        earliest = datetime(2026, 3, 1, 0, 0, tzinfo=UTC)
+        gen = OptionGenerator(mock_flight_data, mock_grounding, mock_option_repo)
+        results = await gen.search_rebook_candidates("MUC", "FRA", earliest)
+
+        assert len(results) == 1
+        assert isinstance(results[0], RebookCandidate)
+        assert results[0].flight_number == "LH98"
+        assert results[0].origin == "MUC"
+        assert results[0].destination == "FRA"
+        assert results[0].source == "lh_group"
+
+    async def test_filters_cancelled_flights(
+        self, mock_flight_data, mock_grounding, mock_option_repo,
+    ):
+        mock_flight_data.get_schedules.return_value = _multi_schedule_response()
+        mock_flight_data.get_flight_status.side_effect = lambda fn, d: (
+            {"FlightStatusResource": {"Flights": {"Flight": [
+                {"FlightStatus": {"Code": "CD"}}
+            ]}}}
+            if fn == "LH98"
+            else {}
+        )
+
+        gen = OptionGenerator(mock_flight_data, mock_grounding, mock_option_repo)
+        earliest = datetime(2026, 3, 1, 0, 0, tzinfo=UTC)
+        results = await gen.search_rebook_candidates("MUC", "FRA", earliest)
+
+        flight_numbers = [r.flight_number for r in results]
+        assert "LH98" not in flight_numbers
+        assert "LH100" in flight_numbers
+
+    async def test_seat_check_for_first_three(
+        self, mock_flight_data, mock_grounding, mock_option_repo,
+    ):
+        """First 3 candidates get seat_available set, rest get None."""
+        mock_flight_data.get_schedules.return_value = _multi_schedule_response()
+        mock_flight_data.get_seat_map.return_value = {"SeatAvailabilityResource": {"data": True}}
+
+        gen = OptionGenerator(mock_flight_data, mock_grounding, mock_option_repo)
+        earliest = datetime(2026, 3, 1, 0, 0, tzinfo=UTC)
+        results = await gen.search_rebook_candidates("MUC", "FRA", earliest)
+
+        assert len(results) == 4
+        # First 3 checked
+        for r in results[:3]:
+            assert r.seat_available is True
+        # 4th not checked
+        assert results[3].seat_available is None
+        assert mock_flight_data.get_seat_map.call_count == 3
+
+    async def test_star_alliance_expansion_for_senator(
+        self, mock_flight_data, mock_grounding, mock_option_repo,
+    ):
+        mock_flight_data.get_schedules.return_value = {}  # No LH schedules
+
+        gen = OptionGenerator(mock_flight_data, mock_grounding, mock_option_repo)
+        earliest = datetime(2026, 3, 1, 0, 0, tzinfo=UTC)
+        results = await gen.search_rebook_candidates(
+            "MUC", "FRA", earliest,
+            booking_class=BookingClass.C,
+            loyalty_tier=LoyaltyTier.SENATOR,
+        )
+
+        star_sources = [r for r in results if r.source == "star_alliance"]
+        assert len(star_sources) > 0
+
+    async def test_any_airline_expansion_for_hon(
+        self, mock_flight_data, mock_grounding, mock_option_repo,
+    ):
+        mock_flight_data.get_schedules.return_value = {}
+
+        gen = OptionGenerator(mock_flight_data, mock_grounding, mock_option_repo)
+        earliest = datetime(2026, 3, 1, 0, 0, tzinfo=UTC)
+        results = await gen.search_rebook_candidates(
+            "MUC", "FRA", earliest,
+            booking_class=BookingClass.F,
+            loyalty_tier=LoyaltyTier.HON_CIRCLE,
+        )
+
+        any_sources = [r for r in results if r.source == "any_airline"]
+        star_sources = [r for r in results if r.source == "star_alliance"]
+        assert len(any_sources) > 0
+        assert len(star_sources) > 0
+
+    async def test_empty_schedules_returns_empty(
+        self, mock_flight_data, mock_grounding, mock_option_repo,
+    ):
+        mock_flight_data.get_schedules.return_value = {}
+
+        gen = OptionGenerator(mock_flight_data, mock_grounding, mock_option_repo)
+        earliest = datetime(2026, 3, 1, 0, 0, tzinfo=UTC)
+        results = await gen.search_rebook_candidates("MUC", "FRA", earliest)
+
+        assert results == []
+
+    async def test_filters_by_earliest_time(
+        self, mock_flight_data, mock_grounding, mock_option_repo,
+    ):
+        mock_flight_data.get_schedules.return_value = _multi_schedule_response()
+
+        gen = OptionGenerator(mock_flight_data, mock_grounding, mock_option_repo)
+        # Only flights at 10:00 or later
+        earliest = datetime(2026, 3, 1, 10, 0, tzinfo=UTC)
+        results = await gen.search_rebook_candidates("MUC", "FRA", earliest)
+
+        assert len(results) == 2
+        assert results[0].flight_number == "LH102"  # 10:15
+        assert results[1].flight_number == "LH104"  # 14:45
+
+    async def test_candidates_sorted_by_departure(
+        self, mock_flight_data, mock_grounding, mock_option_repo,
+    ):
+        mock_flight_data.get_schedules.return_value = _multi_schedule_response()
+
+        gen = OptionGenerator(mock_flight_data, mock_grounding, mock_option_repo)
+        earliest = datetime(2026, 3, 1, 0, 0, tzinfo=UTC)
+        results = await gen.search_rebook_candidates("MUC", "FRA", earliest)
+
+        times = [(r.departure_hour, r.departure_minute) for r in results]
+        assert times == sorted(times)
