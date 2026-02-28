@@ -1,8 +1,121 @@
 package com.jvcodingsolutions.safelanding.core.domain.util.model
 
-/*data class PassengerOptions(
+import kotlinx.datetime.Instant
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 
-)*/
+// ── Enums ─────────────────────────────────────────────────────────────────────
+
+@Serializable
+enum class TransferMode {
+    @SerialName("train") TRAIN,
+    @SerialName("bus")   BUS,
+    @SerialName("taxi")  TAXI,
+}
+
+@Serializable
+enum class GroundMode {
+    @SerialName("train") TRAIN,
+    @SerialName("bus")   BUS,
+}
+
+// ── Detail Data Classes ───────────────────────────────────────────────────────
+
+@Serializable
+data class RebookDetails(
+    val flightNumber: String,
+    val origin: String,
+    val destination: String,
+    val departure: Instant,
+    val seatAvailable: Boolean = true,
+)
+
+@Serializable
+data class Location(
+    val lat: Double,
+    val lng: Double,
+)
+
+@Serializable
+data class HotelDetails(
+    val hotelName: String,
+    val address: String,
+    val location: Location,
+    val nextFlightNumber: String,
+    val nextFlightDeparture: Instant,
+)
+
+@Serializable
+data class GroundTransportDetails(
+    val mode: GroundMode,
+    val route: String,
+    val departure: Instant,
+    val arrival: Instant,
+    val provider: String,
+)
+
+@Serializable
+data class AltAirportDetails(
+    val viaAirport: String,
+    val connectingFlight: String,
+    val transferMode: TransferMode,
+    val totalArrival: Instant,
+)
+
+// ── Sealed Interface ──────────────────────────────────────────────────────────
+
+@Serializable
+sealed interface Option {
+    val id: String
+    val summary: String
+    val description: String
+    val available: Boolean
+    val estimatedArrival: Instant
+
+    @Serializable
+    @SerialName("rebook")
+    data class Rebook(
+        override val id: String,
+        override val summary: String,
+        override val description: String,
+        override val available: Boolean,
+        override val estimatedArrival: Instant,
+        val details: RebookDetails,
+    ) : Option
+
+    @Serializable
+    @SerialName("hotel")
+    data class Hotel(
+        override val id: String,
+        override val summary: String,
+        override val description: String,
+        override val available: Boolean,
+        override val estimatedArrival: Instant,
+        val details: HotelDetails,
+    ) : Option
+
+    @Serializable
+    @SerialName("ground")
+    data class Ground(
+        override val id: String,
+        override val summary: String,
+        override val description: String,
+        override val available: Boolean,
+        override val estimatedArrival: Instant,
+        val details: GroundTransportDetails,
+    ) : Option
+
+    @Serializable
+    @SerialName("alt_airport")
+    data class AltAirport(
+        override val id: String,
+        override val summary: String,
+        override val description: String,
+        override val available: Boolean,
+        override val estimatedArrival: Instant,
+        val details: AltAirportDetails,
+    ) : Option
+}
 
 
 /*
