@@ -9,7 +9,21 @@ and this project uses [CalVer](https://calver.org/) versioning (YYYY.0M.MICRO).
 
 ### Added
 
+- **backend**: Add StateManager for priority escalation and cascading impact
+
+## [2026.02.8] - 2026-02-28
+
+### Added
+
 - **backend**: Live LH API integration for rebook validation
+
+### Documentation
+
+- Update changelog
+
+### Maintenance
+
+- Bump version to 2026.02.8
 
 ## [2026.02.7] - 2026-02-28
 
