@@ -1,6 +1,6 @@
 # Getting Started with Beads (bd)
 
-Beads is our git-backed issue tracker. It keeps all task tracking in the repo so your AI agent (Claude Code, Cursor, etc.) can see what needs to be done, claim work, and track progress across sessions.
+Beads is our git-backed issue tracker. It keeps all task tracking in the repo so your AI agent (Claude Code, Gemini CLI, Cursor, etc.) can see what needs to be done, claim work, and track progress across sessions.
 
 ## 1. Install bd
 
@@ -24,9 +24,50 @@ bd ready     # See available work
 
 That's it — the repo is already initialized.
 
-## 3. Your Agent Gets Instructions Automatically
+## 3. Connect Your AI Agent
 
-The `AGENTS.md` file at the repo root contains all instructions your AI agent needs. Claude Code loads this automatically. It tells the agent to:
+Beads has built-in setup recipes for all major AI coding tools. Run the one matching your tool:
+
+### Claude Code
+
+```bash
+bd setup claude
+```
+
+This installs hooks in `~/.claude/settings.json` that automatically inject beads context at session start and before context compaction.
+
+### Gemini CLI
+
+```bash
+bd setup gemini
+```
+
+This installs hooks in `~/.gemini/settings.json` that automatically inject beads context at session start and before context compression. Works identically to the Claude Code integration.
+
+### Cursor / Windsurf / Other Editors
+
+```bash
+bd setup cursor      # Cursor IDE
+bd setup windsurf    # Windsurf
+bd setup kilocode    # Kilo Code
+bd setup aider       # Aider
+```
+
+### Verify Installation
+
+```bash
+bd setup claude --check   # or gemini, cursor, etc.
+bd doctor                 # General health check
+```
+
+### How It Works
+
+The setup command runs `bd prime` which:
+1. Outputs workflow context for your AI agent to read
+2. Syncs any pending changes
+3. Ensures the agent always knows how to use beads
+
+The `AGENTS.md` file at the repo root contains additional instructions that many agents (Gemini CLI, Codex, Factory, etc.) read automatically. It tells the agent to:
 
 - Use `bd` for all task tracking (no markdown TODOs)
 - Check `bd ready` for available work
