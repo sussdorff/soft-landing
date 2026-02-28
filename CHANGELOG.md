@@ -9,8 +9,38 @@ and this project uses [CalVer](https://calver.org/) versioning (YYYY.0M.MICRO).
 
 ### Added
 
+- Initial Safe-Landing KMP project setup
+- **dashboard**: Make agent control buttons much more prominent
+- **docs**: Add user documentation site with MkDocs Material
+- **landing**: Add marketing landing page at get-softlanding.sussdorff.de
+
+### Changed
+
+- Move KMP passenger app into passenger-app/ subdirectory
+
+### Documentation
+
+- Add CLAUDE.md for Claude Code onboarding
+
+### Fixed
+
+- **infra**: Use handle_path for docs Caddy route
+- **infra**: Add /docs -> /docs/ redirect in Caddy
+
+### Maintenance
+
+- Bump version to 2026.02.3
+
+## [2026.02.3] - 2026-02-28
+
+### Added
+
 - **dashboard**: Add flight selector and multi-disruption mock data
 - **backend**: Add disruption engine, move API docs to /api/docs
+
+### Documentation
+
+- Update changelog
 
 ## [2026.02.2] - 2026-02-28
 
