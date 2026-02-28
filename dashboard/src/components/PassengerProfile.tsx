@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
 import type { PassengerProfile as Profile } from "../types";
+import { OptionDetailsDisplay } from "./OptionDetails";
 
 interface Props {
   passengerId: string;
@@ -175,7 +176,7 @@ export function PassengerProfile({ passengerId, onClose }: Props) {
                     </div>
                     <div className="text-text-primary mt-1">{opt.summary}</div>
                     <div className="text-xs text-text-muted mt-0.5">
-                      {opt.description}
+                      <OptionDetailsDisplay option={opt} />
                     </div>
                   </div>
                 ))}

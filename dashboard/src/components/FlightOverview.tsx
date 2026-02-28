@@ -1,5 +1,6 @@
 import { useMemo, useState, type RefObject } from "react";
 import type { Disruption, Passenger, Option, Wish } from "../types";
+import { OptionDetailsDisplay } from "./OptionDetails";
 
 interface Props {
   disruption: Disruption;
@@ -542,7 +543,7 @@ function PassengerRow({
                         {opt.summary}
                       </div>
                       <div className="text-xs text-text-muted truncate">
-                        {opt.description}
+                        <OptionDetailsDisplay option={opt} />
                       </div>
                     </div>
                     <div className="shrink-0 text-right">
