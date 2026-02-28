@@ -1,0 +1,32 @@
+services:
+  postgres:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: softlanding
+      POSTGRES_USER: softlanding
+      POSTGRES_PASSWORD: softlanding
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  backend:
+    image: ghcr.io/sussdorff/soft-landing-backend:latest
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: "postgresql+asyncpg://softlanding:softlanding@postgres/softlanding"
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      - postgres
+
+  dashboard:
+    image: ghcr.io/sussdorff/soft-landing-dashboard:latest
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:80"
+
+volumes:
+  pgdata:

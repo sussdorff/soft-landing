@@ -1,57 +1,52 @@
 #!/usr/bin/env bash
-# Deploy application code to the SoftLanding server
+# Deploy application to the SoftLanding server
 #
-# Syncs backend, dashboard, and passenger-app code to the server
-# and restarts services as needed.
+# Builds Docker images (ARM), pushes to GHCR, then pulls on server.
+# Docs and landing page are still rsync-deployed (simple static files).
 #
 # Usage:
 #   bash infra/deploy.sh              # Deploy all
 #   bash infra/deploy.sh backend      # Deploy backend only
 #   bash infra/deploy.sh dashboard    # Deploy dashboard only
-#   bash infra/deploy.sh app          # Deploy passenger app only
 #   bash infra/deploy.sh docs         # Deploy documentation only
 #   bash infra/deploy.sh landing      # Deploy landing page only
 
 set -euo pipefail
 
 COMPONENT="${1:-all}"
+BACKEND_IMAGE="ghcr.io/sussdorff/soft-landing-backend"
+DASHBOARD_IMAGE="ghcr.io/sussdorff/soft-landing-dashboard"
+SHA=$(git rev-parse --short HEAD)
 
 deploy_backend() {
-  echo "==> Deploying backend"
-  rsync -avz --delete \
-    --exclude '__pycache__' --exclude '.venv' --exclude '*.pyc' \
-    backend/ "softlanding:/opt/softlanding/backend/"
+  echo "==> Building backend image (linux/arm64)"
+  docker buildx build --platform linux/arm64 \
+    -t "${BACKEND_IMAGE}:${SHA}" \
+    -t "${BACKEND_IMAGE}:latest" \
+    --push backend/
+  echo "    Image pushed: ${BACKEND_IMAGE}:${SHA}"
 
-  ssh softlanding bash << 'EOF'
-cd /opt/softlanding/backend
-if [ -f pyproject.toml ]; then
-  /root/.local/bin/uv sync --python python3.14
-  # Restart backend service if running
-  systemctl restart softlanding-backend 2>/dev/null || true
-fi
-EOF
+  echo "==> Pulling on server"
+  ssh softlanding "cd /opt/softlanding && docker compose pull backend && docker compose up -d backend"
   echo "    Backend deployed"
 }
 
 deploy_dashboard() {
-  echo "==> Deploying dashboard"
-  # Build locally first if package.json exists
-  if [ -f dashboard/package.json ]; then
-    (cd dashboard && npm ci && npm run build)
-  fi
+  echo "==> Building dashboard image (linux/arm64)"
+  docker buildx build --platform linux/arm64 \
+    -t "${DASHBOARD_IMAGE}:${SHA}" \
+    -t "${DASHBOARD_IMAGE}:latest" \
+    --push dashboard/
+  echo "    Image pushed: ${DASHBOARD_IMAGE}:${SHA}"
 
-  rsync -avz --delete \
-    --exclude 'node_modules' --exclude '.next' \
-    dashboard/ "softlanding:/opt/softlanding/dashboard/"
+  echo "==> Pulling on server"
+  ssh softlanding "cd /opt/softlanding && docker compose pull dashboard && docker compose up -d dashboard"
   echo "    Dashboard deployed"
 }
 
-deploy_app() {
-  echo "==> Deploying passenger app (web target)"
-  # KMP web build output — adjust path as needed
-  rsync -avz --delete \
-    passenger-app/ "softlanding:/opt/softlanding/passenger-app/"
-  echo "    Passenger app deployed"
+deploy_compose() {
+  echo "==> Deploying docker-compose.yml to server"
+  scp docker-compose.prod.yml softlanding:/opt/softlanding/docker-compose.yml
 }
 
 deploy_docs() {
@@ -70,20 +65,20 @@ deploy_landing() {
 
 case "${COMPONENT}" in
   all)
+    deploy_compose
     deploy_backend
     deploy_dashboard
-    deploy_app
     deploy_docs
     deploy_landing
     ;;
-  backend)  deploy_backend ;;
+  backend)   deploy_backend ;;
   dashboard) deploy_dashboard ;;
-  app)      deploy_app ;;
-  docs)     deploy_docs ;;
-  landing)  deploy_landing ;;
+  compose)   deploy_compose ;;
+  docs)      deploy_docs ;;
+  landing)   deploy_landing ;;
   *)
     echo "Unknown component: ${COMPONENT}"
-    echo "Usage: $0 [all|backend|dashboard|app|docs|landing]"
+    echo "Usage: $0 [all|backend|dashboard|compose|docs|landing]"
     exit 1
     ;;
 esac

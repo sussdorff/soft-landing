@@ -72,25 +72,15 @@ if ! command -v caddy &>/dev/null; then
 fi
 caddy version
 
-# --- Postgres (Docker container) ---
-echo "==> Setting up Postgres"
-if ! docker ps --format '{{.Names}}' | grep -q softlanding-pg; then
-  docker run -d --name softlanding-pg \
-    --restart unless-stopped \
-    -e POSTGRES_DB=softlanding \
-    -e POSTGRES_USER=softlanding \
-    -e POSTGRES_PASSWORD=softlanding \
-    -p 127.0.0.1:5432:5432 \
-    -v pgdata:/var/lib/postgresql/data \
-    postgres:17
-  echo "    Postgres container started"
-else
-  echo "    Postgres container already running"
-fi
-
 # --- App directories ---
 echo "==> Creating app directories"
-mkdir -p /opt/softlanding/{backend,dashboard,passenger-app,docs/site}
+mkdir -p /opt/softlanding/{docs/site,landing}
+
+# --- Stop legacy standalone Postgres (replaced by docker-compose) ---
+if docker ps -a --format '{{.Names}}' | grep -q softlanding-pg; then
+  echo "==> Removing legacy standalone Postgres container"
+  docker rm -f softlanding-pg 2>/dev/null || true
+fi
 
 # --- Caddyfile ---
 echo "==> Writing Caddyfile"
@@ -108,11 +98,12 @@ ${DOMAIN} {
         file_server
     }
 
-    # Gate Agent Dashboard (React SPA)
-    handle_path /dashboard/* {
-        root * /opt/softlanding/dashboard/dist
-        try_files {path} /index.html
-        file_server
+    # Redirect /dashboard to /dashboard/
+    redir /dashboard /dashboard/ 308
+
+    # Gate Agent Dashboard (nginx container)
+    handle /dashboard/* {
+        reverse_proxy localhost:3000
     }
 
     # Passenger App (KMP/Web target — static files)
@@ -140,9 +131,8 @@ systemctl restart caddy
 
 echo "==> Provision complete"
 echo "    Domain: https://${DOMAIN}"
-echo "    Backend: /opt/softlanding/backend/"
-echo "    Dashboard: /opt/softlanding/dashboard/"
-echo "    Passenger App: /opt/softlanding/passenger-app/"
+echo "    Docker Compose: /opt/softlanding/docker-compose.yml"
+echo "    Docs: /opt/softlanding/docs/site/"
 REMOTE_SCRIPT
 
 echo ""

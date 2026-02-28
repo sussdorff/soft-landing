@@ -1,28 +1,69 @@
-name: Deploy to Hetzner
+name: Build & Deploy
 
 on:
   push:
     branches: [main]
 
+env:
+  REGISTRY: ghcr.io
+  BACKEND_IMAGE: ghcr.io/sussdorff/soft-landing-backend
+  DASHBOARD_IMAGE: ghcr.io/sussdorff/soft-landing-dashboard
+
 jobs:
-  deploy:
+  build-and-push:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: dashboard/package-lock.json
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-      - name: Build dashboard
-        working-directory: dashboard
-        run: |
-          npm ci
-          npm run build
+      - name: Set up QEMU (for ARM cross-compilation)
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: linux/arm64
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push backend
+        uses: docker/build-push-action@v6
+        with:
+          context: backend
+          platforms: linux/arm64
+          push: true
+          tags: |
+            ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
+            ${{ env.BACKEND_IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push dashboard
+        uses: docker/build-push-action@v6
+        with:
+          context: dashboard
+          platforms: linux/arm64
+          push: true
+          tags: |
+            ${{ env.DASHBOARD_IMAGE }}:${{ github.sha }}
+            ${{ env.DASHBOARD_IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
 
       - name: Setup SSH key
         run: |
@@ -31,31 +72,19 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H 46.224.137.140 >> ~/.ssh/known_hosts
 
-      - name: Deploy backend
+      - name: Deploy docker-compose.prod.yml
         run: |
-          rsync -avz --delete \
-            --exclude '__pycache__' --exclude '.venv' --exclude '*.pyc' \
-            backend/ root@46.224.137.140:/opt/softlanding/backend/
+          scp docker-compose.prod.yml root@46.224.137.140:/opt/softlanding/docker-compose.yml
 
+      - name: Pull and restart containers
+        run: |
           ssh root@46.224.137.140 bash << 'EOF'
-          cd /opt/softlanding/backend
-          if [ -f pyproject.toml ]; then
-            /root/.local/bin/uv sync --python python3.14
-            systemctl restart softlanding-backend 2>/dev/null || true
-          fi
+          cd /opt/softlanding
+          docker compose pull
+          docker compose up -d
           EOF
 
-      - name: Deploy dashboard
-        run: |
-          rsync -avz --delete \
-            dashboard/dist/ root@46.224.137.140:/opt/softlanding/dashboard/dist/
-
-      - name: Deploy passenger app
-        run: |
-          rsync -avz --delete \
-            passenger-app/ root@46.224.137.140:/opt/softlanding/passenger-app/
-
-      - name: Build and deploy docs
+      - name: Deploy docs (rsync)
         run: |
           pip install -r docs/requirements.txt -q
           mkdocs build -f docs/mkdocs.yml
@@ -63,6 +92,7 @@ jobs:
 
       - name: Verify deployment
         run: |
+          sleep 10
           curl -sf https://softlanding.sussdorff.de/ || echo "Health check pending"
-          curl -sf https://softlanding.sussdorff.de/dashboard/ || echo "Dashboard health check pending"
-          curl -sf https://softlanding.sussdorff.de/docs/ || echo "Docs health check pending"
+          curl -sf https://softlanding.sussdorff.de/dashboard/ || echo "Dashboard pending"
+          curl -sf https://softlanding.sussdorff.de/docs/ || echo "Docs pending"
