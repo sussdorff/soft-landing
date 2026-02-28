@@ -4,7 +4,11 @@ Receives raw disruption events, classifies them, finds affected passengers,
 triggers option generation, and sends WebSocket notifications.
 """
 
+from __future__ import annotations
+
+import logging
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from sqlalchemy import select
@@ -17,10 +21,15 @@ from app.db.tables import (
     PassengerRow,
     SegmentRow,
 )
-from app.models import DisruptionType
+from app.models import BookingClass, DisruptionType, LoyaltyTier
+from app.services.gemini import GeminiGroundingService
 from app.services.option_generator import OptionGenerator
 from app.ws import ConnectionManager
 
+if TYPE_CHECKING:
+    from app.services.lufthansa import LufthansaClient
+
+log = logging.getLogger(__name__)
 
 # Status code → DisruptionType mapping
 _STATUS_MAP: dict[str, DisruptionType] = {
@@ -46,10 +55,14 @@ class DisruptionEngine:
         self,
         session_factory: async_sessionmaker[AsyncSession],
         ws_manager: ConnectionManager,
+        gemini: GeminiGroundingService | None = None,
+        lh_client: LufthansaClient | None = None,
     ) -> None:
         self.session_factory = session_factory
         self.ws_manager = ws_manager
-        self.option_generator = OptionGenerator()
+        self.gemini = gemini
+        self.lh_client = lh_client
+        self.option_generator = OptionGenerator(gemini=gemini, lh_client=lh_client)
 
     @staticmethod
     def classify_event(raw: dict) -> DisruptionType:
@@ -99,6 +112,21 @@ class DisruptionEngine:
         disruption_id = uuid4().hex[:8]
         now = datetime.now(tz=UTC)
 
+        # Generate explanation — prefer Gemini, fall back to raw payload
+        explanation = raw.get("explanation", "")
+        if self.gemini is not None:
+            try:
+                explanation = await self.gemini.explain_disruption(
+                    dtype.value,
+                    raw["flight_number"],
+                    raw.get("origin", ""),
+                    raw.get("destination", ""),
+                    raw.get("reason", ""),
+                )
+            except Exception:
+                log.exception("Gemini explain_disruption failed, using fallback")
+                explanation = raw.get("explanation", "")
+
         async with self.session_factory() as session:
             # Create disruption row
             disruption = DisruptionRow(
@@ -108,7 +136,7 @@ class DisruptionEngine:
                 origin=raw.get("origin", ""),
                 destination=raw.get("destination", ""),
                 reason=raw.get("reason", ""),
-                explanation=raw.get("explanation", ""),
+                explanation=explanation,
                 detected_at=now,
             )
             session.add(disruption)
@@ -126,14 +154,20 @@ class DisruptionEngine:
                 ))
                 pax.status = "notified"
 
-                # Generate options
-                self.option_generator.generate_options(
+                # Resolve loyalty/booking from passenger row
+                loyalty = LoyaltyTier(pax.loyalty_tier) if pax.loyalty_tier else LoyaltyTier.NONE
+                booking = BookingClass(pax.booking_class) if pax.booking_class else BookingClass.Y
+
+                # Generate options (async — may call Gemini)
+                await self.option_generator.generate_options(
                     session,
-                    disruption_id=disruption_id,
-                    passenger_id=pax.id,
-                    disruption_type=dtype,
-                    destination=raw.get("destination", ""),
-                    base_time=now,
+                    disruption_id,
+                    pax.id,
+                    dtype,
+                    raw.get("destination", ""),
+                    now,
+                    loyalty_tier=loyalty,
+                    booking_class=booking,
                 )
 
             await session.commit()

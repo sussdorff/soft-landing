@@ -289,6 +289,34 @@ class LufthansaClient:
             params={"lang": lang},
         )
 
+    async def get_lounges(
+        self,
+        airport_code: str,
+        *,
+        cabin_class: str | None = None,
+        tier_code: str | None = None,
+        lang: str = "en",
+    ) -> dict:
+        """Lounge-Informationen fuer einen Flughafen.
+
+        Args:
+            airport_code: 3-Buchstaben IATA Code (z.B. "FRA", "MUC")
+            cabin_class: F, C, E oder M — exklusiv mit tier_code
+            tier_code: HON, SEN, FTL oder SGC — exklusiv mit cabin_class
+            lang: ISO 639-1 Sprachcode
+
+        Returns:
+            Parsed JSON der LoungeResource
+        """
+        params: dict[str, str] = {"lang": lang}
+        if cabin_class:
+            params["cabinClass"] = cabin_class
+        elif tier_code:
+            params["tierCode"] = tier_code
+        return await self._get_json(
+            f"/offers/lounges/{airport_code}", params=params
+        )
+
     # --- Context Manager ------------------------------------------------------
 
     async def __aenter__(self) -> "LufthansaClient":

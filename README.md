@@ -83,6 +83,90 @@ When flights break, passengers crowd the desk and gate agents drown in manual re
 
 ---
 
+## Service Level Rules — Status & Class Differentiation
+
+The system differentiates passenger treatment based on **Miles & More loyalty tier** and **booking class**. These rules reflect real Lufthansa IROP (Irregular Operations) procedures.
+
+### Priority Scoring
+
+Each passenger gets a priority score determining their position in the gate agent's queue:
+
+| Factor | Score |
+|--------|-------|
+| **HON Circle** | +40 |
+| **Senator** | +25 |
+| **Frequent Traveller** | +10 |
+| No status | +0 |
+| First Class (F/A) | +30 |
+| Business Class (J/C/D/Z) | +20 |
+| Premium Economy (E/N/P) | +10 |
+| Economy full-fare (Y/B) | +5 |
+| Economy discounted | +0 |
+
+*Example: HON Circle in Business (J) = 60, Senator in Economy (Y) = 30, No status Economy (M) = 0*
+
+### Rebooking Scope
+
+| Tier | Rebooking Options | Upgrade |
+|------|------------------|---------|
+| **HON Circle** | Any airline (incl. non-Star Alliance: AF, BA, EW) | Yes — Business if Economy full |
+| **Senator** | Star Alliance network (LH, LX, OS, SN + partners) | Yes — if available |
+| **Frequent Traveller** | Lufthansa Group (LH, OS, LX, SN) | No |
+| **No status** | Lufthansa Group | No |
+
+### Hotel Accommodation
+
+| Tier | Stars | Budget/Night | Room Type |
+|------|-------|-------------|-----------|
+| **HON Circle** | 5-star | €200 | Executive Suite / Club Room |
+| **Senator / Business Class** | 4-star | €150 | Standard room |
+| **FTL / Economy full-fare** | 3-4 star | €100 | Standard room |
+| **Economy discounted** | 3-star | €80 | Standard room |
+
+Hotels sourced via **Gemini + Google Maps grounding** when available, with deterministic fallbacks for demo reliability.
+
+### Ground Transport
+
+| Tier | Transport Mode | Details |
+|------|---------------|---------|
+| **HON Circle** | Limousine | Complimentary, ready in ~30 min |
+| **Senator** | Taxi voucher | Ready in ~30 min |
+| **FTL / No status** | Shuttle bus or Deutsche Bahn | Departs in ~2 hours |
+
+### Lounge Access During Wait
+
+| Tier | Lounge Level | Key Amenities |
+|------|-------------|---------------|
+| **HON Circle** | First Class Lounge/Terminal | Fine dining, sleeping rooms, shower suites, personal assistant |
+| **Senator** | Senator Lounge | Hot/cold buffet, premium drinks, showers, quiet zone |
+| **Frequent Traveller** | Business Lounge | Buffet, drinks, workstations |
+| **Business ticket (no status)** | Business Lounge | Buffet, drinks, workstations |
+| **Economy (no status)** | No lounge access | Meal voucher instead |
+
+Lounge data sourced from **Lufthansa Lounge API** (`GET /v1/offers/lounges/{airport}?tierCode=...`) with static fallback data for MUC, FRA, NUE.
+
+### Meal Vouchers
+
+Passengers **without** lounge access receive a meal voucher:
+
+| Tier | Amount | Note |
+|------|--------|------|
+| Lounge access (HON/SEN/FTL/Business) | €0 | Covered by lounge catering |
+| Economy full-fare (Y/B) | €15 | Airport restaurants |
+| Economy discounted | €12 | Airport restaurants |
+
+### EU261 Compensation Reference
+
+| Distance | Delay ≥3h | Amount |
+|----------|----------|--------|
+| ≤ 1,500 km | Yes | €250 |
+| 1,500–3,500 km | Yes | €400 |
+| > 3,500 km | Yes | €600 |
+
+*Halved if airline rebooks within 2h/3h/4h of original arrival. Waived for extraordinary circumstances (weather, ATC strikes) but care obligations (hotel, meals, transport) always apply.*
+
+---
+
 ## Demo Scenarios
 
 ### Scenario 1: Aircraft Malfunction → Diversion

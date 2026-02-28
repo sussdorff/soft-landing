@@ -1,6 +1,14 @@
 """ReRoute — FastAPI backend for airline disruption management."""
 
+import logging
+import os
 from contextlib import asynccontextmanager
+from dataclasses import asdict
+from datetime import date as date_cls
+
+from dotenv import load_dotenv
+
+load_dotenv()  # Load .env before reading API keys
 
 from fastapi import Depends, FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,7 +19,27 @@ from app.db.engine import async_session, get_session, init_db
 from app.models import DenyRequest, IngestEventRequest, SimulateRequest, WishRequest
 from app.seeds import scenario_snowstorm
 from app.services.disruption_engine import DisruptionEngine
+from app.services.gemini import FlightContext, GeminiGroundingService
+from app.services.lufthansa import LufthansaClient
 from app.ws import manager
+
+log = logging.getLogger(__name__)
+
+# --- External service instances (None when API keys missing) ---
+
+_gemini: GeminiGroundingService | None = None
+if os.environ.get("GEMINI_API_KEY"):
+    _gemini = GeminiGroundingService()
+    log.info("Gemini Grounding enabled (hotels, transport, explanations)")
+else:
+    log.warning("GEMINI_API_KEY not set — Gemini disabled, using fallback data")
+
+_lh_client: LufthansaClient | None = None
+if os.environ.get("LH_API_CLIENT_ID") and os.environ.get("LH_API_CLIENT_SECRET"):
+    _lh_client = LufthansaClient()
+    log.info("Lufthansa API enabled")
+else:
+    log.warning("LH_API credentials not set — LH API disabled, using static data")
 
 
 @asynccontextmanager
@@ -43,7 +71,7 @@ app.add_middleware(
 )
 
 # Disruption engine instance (shared across requests)
-engine = DisruptionEngine(async_session, manager)
+engine = DisruptionEngine(async_session, manager, gemini=_gemini, lh_client=_lh_client)
 
 
 # --- Disruptions ---
@@ -170,6 +198,15 @@ async def get_passenger_profile(passenger_id: str, session: AsyncSession = Depen
     }
 
 
+@app.get("/passengers/{passenger_id}/service-level")
+async def get_passenger_service_level(passenger_id: str, session: AsyncSession = Depends(get_session)):
+    pax = await store.get_passenger(session, passenger_id)
+    if not pax:
+        raise HTTPException(404, "Passenger not found")
+    sl = store.compute_service_level(pax.loyalty_tier, pax.booking_class)
+    return sl.model_dump(by_alias=True, mode="json")
+
+
 @app.post("/passengers/{passenger_id}/wish")
 async def submit_wish(passenger_id: str, req: WishRequest, session: AsyncSession = Depends(get_session)):
     pax = await store.get_passenger(session, passenger_id)
@@ -224,6 +261,49 @@ async def deny_wish(wish_id: str, req: DenyRequest, session: AsyncSession = Depe
         "reason": req.reason,
     })
     return wish.model_dump(by_alias=True, mode="json")
+
+
+# --- Lufthansa API ---
+
+@app.get("/api/lounges/{airport_code}")
+async def get_airport_lounges(airport_code: str, tier: str = Query(None)):
+    if not _lh_client:
+        raise HTTPException(503, "Lufthansa API not configured")
+    tier_map = {"hon": "HON", "sen": "SEN", "ftl": "FTL"}
+    tier_code = tier_map.get(tier) if tier else None
+    data = await _lh_client.get_lounges(airport_code, tier_code=tier_code)
+    return data
+
+
+@app.get("/api/flights/{flight_number}/status")
+async def get_flight_status(flight_number: str, date: str = Query(None)):
+    if not _lh_client:
+        raise HTTPException(503, "Lufthansa API not configured")
+    flight_date = date or date_cls.today().isoformat()
+    return await _lh_client.get_flight_status(flight_number, flight_date)
+
+
+@app.get("/api/schedules/{origin}/{destination}")
+async def get_schedules(origin: str, destination: str, date: str = Query(None)):
+    if not _lh_client:
+        raise HTTPException(503, "Lufthansa API not configured")
+    flight_date = date or date_cls.today().isoformat()
+    return await _lh_client.get_schedules(origin, destination, flight_date)
+
+
+# --- Flight context (Gemini Search grounding) ---
+
+@app.get("/flights/{flight_number}/context")
+async def get_flight_context(flight_number: str, date: str = Query(None)):
+    """Get contextual intelligence about a flight (weather, NOTAMs, events).
+
+    Uses Gemini Search grounding for real-time data.
+    """
+    if _gemini is None:
+        raise HTTPException(503, "Gemini not configured")
+    flight_date = date or date_cls.today().isoformat()
+    ctx: FlightContext = await _gemini.get_flight_context(flight_number, flight_date)
+    return asdict(ctx)
 
 
 # --- WebSocket ---

@@ -36,6 +36,8 @@ class PassengerRow(Base):
     status: Mapped[str] = mapped_column(String(20), default="unaffected")
     denial_count: Mapped[int] = mapped_column(Integer, default=0)
     priority: Mapped[int] = mapped_column(Integer, default=0)
+    loyalty_tier: Mapped[str] = mapped_column(String(10), default="none")
+    booking_class: Mapped[str] = mapped_column(String(2), default="Y")
 
     segments: Mapped[list["SegmentRow"]] = relationship(
         back_populates="passenger", cascade="all, delete-orphan",

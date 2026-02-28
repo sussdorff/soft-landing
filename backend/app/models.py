@@ -41,6 +41,8 @@ class OptionType(StrEnum):
     HOTEL = auto()
     GROUND = auto()
     ALT_AIRPORT = auto()
+    LOUNGE = auto()
+    VOUCHER = auto()
 
 
 class TransferMode(StrEnum):
@@ -58,6 +60,86 @@ class WishStatus(StrEnum):
     PENDING = auto()
     APPROVED = auto()
     DENIED = auto()
+
+
+class LoyaltyTier(StrEnum):
+    """Lufthansa Miles & More status levels."""
+    NONE = "none"              # No status
+    FREQUENT_TRAVELLER = "ftl"  # Star Alliance Silver
+    SENATOR = "sen"            # Star Alliance Gold
+    HON_CIRCLE = "hon"         # Above Gold, invitation-only
+
+
+class CabinClass(StrEnum):
+    """Cabin classes."""
+    ECONOMY = "economy"
+    PREMIUM_ECONOMY = "premium_economy"
+    BUSINESS = "business"
+    FIRST = "first"
+
+
+class BookingClass(StrEnum):
+    """Lufthansa booking class codes."""
+    # First
+    F = "F"  # Full-fare First
+    A = "A"  # Award/discounted First
+    # Business
+    J = "J"  # Full-fare Business
+    C = "C"  # Business
+    D = "D"  # Discounted Business
+    Z = "Z"  # Discounted Business
+    # Premium Economy
+    E = "E"
+    N = "N"
+    P = "P"
+    # Economy (full-fare)
+    Y = "Y"  # Full-fare Economy
+    B = "B"  # Full-fare Economy
+    # Economy (mid-tier)
+    H = "H"
+    K = "K"
+    M = "M"
+    # Economy (discounted)
+    L = "L"
+    T = "T"
+    V = "V"
+    W = "W"
+    Q = "Q"
+    G = "G"
+    S = "S"
+
+
+_BOOKING_TO_CABIN: dict[BookingClass, CabinClass] = {
+    BookingClass.F: CabinClass.FIRST,
+    BookingClass.A: CabinClass.FIRST,
+    BookingClass.J: CabinClass.BUSINESS,
+    BookingClass.C: CabinClass.BUSINESS,
+    BookingClass.D: CabinClass.BUSINESS,
+    BookingClass.Z: CabinClass.BUSINESS,
+    BookingClass.E: CabinClass.PREMIUM_ECONOMY,
+    BookingClass.N: CabinClass.PREMIUM_ECONOMY,
+    BookingClass.P: CabinClass.PREMIUM_ECONOMY,
+    BookingClass.Y: CabinClass.ECONOMY,
+    BookingClass.B: CabinClass.ECONOMY,
+    BookingClass.H: CabinClass.ECONOMY,
+    BookingClass.K: CabinClass.ECONOMY,
+    BookingClass.M: CabinClass.ECONOMY,
+    BookingClass.L: CabinClass.ECONOMY,
+    BookingClass.T: CabinClass.ECONOMY,
+    BookingClass.V: CabinClass.ECONOMY,
+    BookingClass.W: CabinClass.ECONOMY,
+    BookingClass.Q: CabinClass.ECONOMY,
+    BookingClass.G: CabinClass.ECONOMY,
+    BookingClass.S: CabinClass.ECONOMY,
+}
+
+# Full-fare economy booking classes (higher priority than discounted)
+_FULL_FARE_ECONOMY = {BookingClass.Y, BookingClass.B}
+
+
+def cabin_class_from_booking(booking_class: BookingClass) -> CabinClass:
+    """Derive the cabin class from a Lufthansa booking class code."""
+    return _BOOKING_TO_CABIN.get(booking_class, CabinClass.ECONOMY)
 
 
 # --- Core Models ---
@@ -93,6 +175,21 @@ class Passenger(CamelModel):
     status: PassengerStatus = PassengerStatus.UNAFFECTED
     denial_count: int = 0
     priority: int = 0
+    loyalty_tier: LoyaltyTier = LoyaltyTier.NONE
+    booking_class: BookingClass = BookingClass.Y
+    cabin_class: CabinClass = CabinClass.ECONOMY
+
+
+class ServiceLevel(CamelModel):
+    """Computed service recovery parameters based on passenger profile."""
+    priority_score: int  # Higher = served first
+    hotel_stars: int  # 3-5
+    hotel_budget_eur: int  # Per night budget
+    transport_mode: str  # "limousine", "taxi", "shuttle"
+    lounge_access: str  # "first_class", "senator", "business", "none"
+    meal_voucher_eur: int  # 0 if lounge access, else 12-15
+    rebooking_scope: str  # "any_airline", "star_alliance", "lh_group"
+    upgrade_eligible: bool  # Can be rebooked to higher cabin if needed
 
 
 # --- Option Detail Types ---
@@ -111,6 +208,10 @@ class HotelDetails(CamelModel):
     location: dict[str, float]  # {"lat": ..., "lng": ...}
     next_flight_number: str
     next_flight_departure: datetime
+    stars: int = 3
+    price_per_night: int | None = None
+    maps_uri: str = ""
+    rating: str = ""
 
 
 class GroundTransportDetails(CamelModel):
@@ -128,7 +229,25 @@ class AltAirportDetails(CamelModel):
     total_arrival: datetime
 
 
-type OptionDetails = RebookDetails | HotelDetails | GroundTransportDetails | AltAirportDetails
+class LoungeDetails(CamelModel):
+    lounge_name: str
+    terminal: str
+    location: str  # e.g. "Gate area B, Level 2"
+    access_type: str  # "first_class", "senator", "business"
+    amenities: list[str] = Field(default_factory=list)
+    opening_hours: str = ""
+    shower_available: bool = False
+    sleeping_rooms: bool = False
+
+
+class VoucherDetails(CamelModel):
+    voucher_type: str  # "meal", "refreshment"
+    amount_eur: int
+    valid_until: datetime
+    accepted_at: list[str] = Field(default_factory=list)  # Restaurant/shop names
+
+
+type OptionDetails = RebookDetails | HotelDetails | GroundTransportDetails | AltAirportDetails | LoungeDetails | VoucherDetails
 
 
 class Option(CamelModel):

@@ -15,7 +15,7 @@ from app.db.tables import (
     PassengerRow,
     SegmentRow,
 )
-from app.seeds.passengers import pick_passengers
+from app.seeds.passengers import compute_priority, pick_passengers
 
 # Cancelled flights departing MUC
 CANCELLED_FLIGHTS = [
@@ -63,8 +63,8 @@ ONWARD_CONNECTIONS = {
 HOTELS = [
     ("Hilton Munich Airport", "Terminalstr. Mitte 20, 85356 Munich Airport", 48.3537, 11.7750),
     ("Marriott Munich Airport", "Alois-Steinecker-Str. 20, 85354 Freising", 48.3989, 11.7411),
-    ("NH München Airport", "Lohstr. 21, 85445 Oberding", 48.3274, 11.8136),
-    ("Novotel München Airport", "Nordallee 29, 85356 Munich Airport", 48.3549, 11.7712),
+    ("NH Munchen Airport", "Lohstr. 21, 85445 Oberding", 48.3274, 11.8136),
+    ("Novotel Munchen Airport", "Nordallee 29, 85356 Munich Airport", 48.3549, 11.7712),
 ]
 
 # Rebook flights (next day)
@@ -78,11 +78,11 @@ REBOOK_OPTIONS = {
 
 # Ground transport alternatives
 GROUND_OPTIONS = {
-    "CDG": ("ICE train Munich Hbf → Paris Gare de l'Est", "Deutsche Bahn / SNCF", timedelta(hours=6)),
-    "FRA": ("ICE train Munich Hbf → Frankfurt Hbf", "Deutsche Bahn", timedelta(hours=3, minutes=15)),
+    "CDG": ("ICE train Munich Hbf -> Paris Gare de l'Est", "Deutsche Bahn / SNCF", timedelta(hours=6)),
+    "FRA": ("ICE train Munich Hbf -> Frankfurt Hbf", "Deutsche Bahn", timedelta(hours=3, minutes=15)),
     "FCO": None,  # No sensible ground option to Rome
     "BCN": None,  # No sensible ground option to Barcelona
-    "ZRH": ("EC train Munich Hbf → Zürich HB", "Deutsche Bahn / SBB", timedelta(hours=3, minutes=45)),
+    "ZRH": ("EC train Munich Hbf -> Zurich HB", "Deutsche Bahn / SBB", timedelta(hours=3, minutes=45)),
 }
 
 # Alt airport routing
@@ -97,8 +97,24 @@ ALT_AIRPORTS = {
 PAX_PER_FLIGHT = 25
 DISRUPTION_ID = "dis-snowstorm-001"
 
+# Fixed per-flight profile distribution (25 pax):
+# 1 HON (Business J/C), 2 Senator (1 Business C/D, 1 Eco Y),
+# 4 FTL (1 Business Z, 3 Eco Y/B/H), 18 No Status (2 full Y/B, 16 discounted)
+_SNOWSTORM_PROFILES: list[tuple[str, str]] = [
+    ("hon", "J"),
+    ("sen", "C"), ("sen", "Y"),
+    ("ftl", "Z"), ("ftl", "Y"), ("ftl", "B"), ("ftl", "H"),
+    ("none", "Y"), ("none", "B"),
+    ("none", "M"), ("none", "L"), ("none", "T"), ("none", "V"),
+    ("none", "W"), ("none", "Q"), ("none", "M"), ("none", "L"),
+    ("none", "T"), ("none", "V"), ("none", "W"), ("none", "Q"),
+    ("none", "M"), ("none", "L"), ("none", "T"), ("none", "V"),
+]
+assert len(_SNOWSTORM_PROFILES) == PAX_PER_FLIGHT
+
 
 async def seed(session: AsyncSession) -> str:
+    rng = random.Random(42)
     base = datetime.now(tz=UTC)
     pax_counter = 0
 
@@ -108,7 +124,7 @@ async def seed(session: AsyncSession) -> str:
         flight_number="MUC-HUB",
         origin="MUC",
         destination="ALL",
-        reason="Heavy snowstorm in Munich — all runways closed",
+        reason="Heavy snowstorm in Munich -- all runways closed",
         explanation=(
             "Due to a severe snowstorm at Munich Airport, all runways are closed "
             "and 6 departing flights have been cancelled. Estimated reopening in 6-8 hours. "
@@ -120,17 +136,31 @@ async def seed(session: AsyncSession) -> str:
 
     for flight_idx, (flight_num, origin, dest, flight_dur) in enumerate(CANCELLED_FLIGHTS):
         departure = base + timedelta(hours=1 + flight_idx * 0.5)
-        passengers = pick_passengers(PAX_PER_FLIGHT, start_index=pax_counter)
+
+        # Shuffle the fixed profiles per flight for variety
+        flight_profiles = list(_SNOWSTORM_PROFILES)
+        rng.shuffle(flight_profiles)
+
+        passengers = pick_passengers(
+            PAX_PER_FLIGHT,
+            start_index=pax_counter,
+            profile_distribution=flight_profiles,
+            rng=rng,
+        )
         pax_counter += PAX_PER_FLIGHT
 
-        for pid, name, bref in passengers:
-            has_connection = random.random() < 0.6
+        for pid, name, bref, loyalty_tier, booking_class in passengers:
+            has_connection = rng.random() < 0.6
+            priority = compute_priority(loyalty_tier, booking_class)
+
             pax_row = PassengerRow(
                 id=pid,
                 name=name,
                 booking_ref=bref,
                 status="notified",
-                priority=random.randint(1, 5),
+                priority=priority,
+                loyalty_tier=loyalty_tier,
+                booking_class=booking_class,
             )
             session.add(pax_row)
 
@@ -148,8 +178,8 @@ async def seed(session: AsyncSession) -> str:
 
             # Onward connection (60% of passengers)
             if has_connection and dest in ONWARD_CONNECTIONS:
-                conn = random.choice(ONWARD_CONNECTIONS[dest])
-                conn_depart = departure + flight_dur + timedelta(hours=random.uniform(2, 4))
+                conn = rng.choice(ONWARD_CONNECTIONS[dest])
+                conn_depart = departure + flight_dur + timedelta(hours=rng.uniform(2, 4))
                 seg2 = SegmentRow(
                     passenger_id=pid,
                     flight_number=conn[0],
@@ -167,7 +197,7 @@ async def seed(session: AsyncSession) -> str:
             ))
 
             # Generate 4 options per passenger
-            _add_options(session, pid, dest, base, departure)
+            _add_options(session, pid, dest, base, departure, rng)
 
     await session.commit()
     return DISRUPTION_ID
@@ -179,13 +209,14 @@ def _add_options(
     dest: str,
     base: datetime,
     departure: datetime,
+    rng: random.Random,
 ) -> None:
     next_day = base + timedelta(days=1)
-    hotel = random.choice(HOTELS)
+    hotel = rng.choice(HOTELS)
 
     # 1. Rebook
     if dest in REBOOK_OPTIONS:
-        rb = random.choice(REBOOK_OPTIONS[dest])
+        rb = rng.choice(REBOOK_OPTIONS[dest])
         rb_dep_h, rb_dep_m = map(int, rb[3].split(":"))
         rb_arr_h, rb_arr_m = map(int, rb[4].split(":"))
         rb_departure = next_day.replace(hour=rb_dep_h, minute=rb_dep_m, second=0, microsecond=0)
@@ -196,7 +227,7 @@ def _add_options(
             passenger_id=passenger_id,
             type="rebook",
             summary=f"Rebook to {rb[0]} tomorrow {rb[3]}",
-            description=f"Rebook to {rb[0]} departing {rb[1]} {rb[3]} → {rb[2]} {rb[4]} tomorrow.",
+            description=f"Rebook to {rb[0]} departing {rb[1]} {rb[3]} -> {rb[2]} {rb[4]} tomorrow.",
             details_json={
                 "flight_number": rb[0], "origin": rb[1], "destination": rb[2],
                 "departure": rb_departure.isoformat(), "seat_available": True,
@@ -251,7 +282,7 @@ def _add_options(
             passenger_id=passenger_id,
             type="alt_airport",
             summary=f"Fly via {via} to {dest}",
-            description=f"Transfer to {via}, then {conn_flight} {via}→{dest}.",
+            description=f"Transfer to {via}, then {conn_flight} {via}->{dest}.",
             details_json={
                 "via_airport": via, "connecting_flight": conn_flight,
                 "transfer_mode": transfer,

@@ -16,18 +16,26 @@ from app.db.tables import (
 )
 from app.models import (
     AltAirportDetails,
+    BookingClass,
+    CabinClass,
     Disruption,
     DisruptionType,
     GroundTransportDetails,
     HotelDetails,
+    LoungeDetails,
+    LoyaltyTier,
     Option,
     OptionType,
     Passenger,
     PassengerStatus,
     RebookDetails,
     Segment,
+    ServiceLevel,
+    VoucherDetails,
     Wish,
     WishStatus,
+    _FULL_FARE_ECONOMY,
+    cabin_class_from_booking,
 )
 
 
@@ -48,6 +56,8 @@ def _row_to_disruption(row: DisruptionRow) -> Disruption:
 
 
 def _row_to_passenger(row: PassengerRow) -> Passenger:
+    booking_cls = BookingClass(row.booking_class) if row.booking_class else BookingClass.Y
+    loyalty = LoyaltyTier(row.loyalty_tier) if row.loyalty_tier else LoyaltyTier.NONE
     return Passenger(
         id=row.id,
         name=row.name,
@@ -65,6 +75,9 @@ def _row_to_passenger(row: PassengerRow) -> Passenger:
         status=PassengerStatus(row.status),
         denial_count=row.denial_count,
         priority=row.priority,
+        loyalty_tier=loyalty,
+        booking_class=booking_cls,
+        cabin_class=cabin_class_from_booking(booking_cls),
     )
 
 
@@ -78,6 +91,10 @@ def _details_from_json(opt_type: str, data: dict):
             return GroundTransportDetails(**data)
         case "alt_airport":
             return AltAirportDetails(**data)
+        case "lounge":
+            return LoungeDetails(**data)
+        case "voucher":
+            return VoucherDetails(**data)
         case _:
             return data
 
@@ -105,6 +122,110 @@ def _row_to_wish(row: WishRow) -> Wish:
         status=WishStatus(row.status),
         denial_reason=row.denial_reason,
         confirmation_details=row.confirmation_details,
+    )
+
+
+# --- Service level computation ---
+
+def compute_service_level(
+    loyalty_tier: LoyaltyTier, booking_class: BookingClass,
+) -> ServiceLevel:
+    """Compute service recovery parameters from passenger profile.
+
+    Priority matrix based on Lufthansa disruption management research:
+    - Loyalty tier contributes: HON +40, SEN +25, FTL +10, NONE +0
+    - Cabin/fare contributes:  First +30, Business +20, PremEco +10,
+                               Economy full-fare(Y/B) +5, Economy discounted +0
+    """
+    cabin = cabin_class_from_booking(booking_class)
+
+    # --- Priority score ---
+    tier_score = {
+        LoyaltyTier.HON_CIRCLE: 40,
+        LoyaltyTier.SENATOR: 25,
+        LoyaltyTier.FREQUENT_TRAVELLER: 10,
+        LoyaltyTier.NONE: 0,
+    }[loyalty_tier]
+
+    cabin_score: int
+    if cabin == CabinClass.FIRST:
+        cabin_score = 30
+    elif cabin == CabinClass.BUSINESS:
+        cabin_score = 20
+    elif cabin == CabinClass.PREMIUM_ECONOMY:
+        cabin_score = 10
+    elif booking_class in _FULL_FARE_ECONOMY:
+        cabin_score = 5
+    else:
+        cabin_score = 0
+
+    priority_score = tier_score + cabin_score
+
+    # --- Service parameters by combined tier ---
+    # HON Circle (any cabin)
+    if loyalty_tier == LoyaltyTier.HON_CIRCLE:
+        return ServiceLevel(
+            priority_score=priority_score,
+            hotel_stars=5,
+            hotel_budget_eur=200,
+            transport_mode="limousine",
+            lounge_access="first_class",
+            meal_voucher_eur=0,  # Lounge access covers meals
+            rebooking_scope="any_airline",
+            upgrade_eligible=True,
+        )
+
+    # Senator or Business cabin
+    if loyalty_tier == LoyaltyTier.SENATOR or cabin in (
+        CabinClass.BUSINESS, CabinClass.FIRST,
+    ):
+        return ServiceLevel(
+            priority_score=priority_score,
+            hotel_stars=4,
+            hotel_budget_eur=150,
+            transport_mode="taxi",
+            lounge_access="senator" if loyalty_tier == LoyaltyTier.SENATOR else "business",
+            meal_voucher_eur=0,  # Lounge access covers meals
+            rebooking_scope="star_alliance",
+            upgrade_eligible=True,
+        )
+
+    # FTL or full-fare Economy
+    if loyalty_tier == LoyaltyTier.FREQUENT_TRAVELLER or booking_class in _FULL_FARE_ECONOMY:
+        return ServiceLevel(
+            priority_score=priority_score,
+            hotel_stars=4 if loyalty_tier == LoyaltyTier.FREQUENT_TRAVELLER else 3,
+            hotel_budget_eur=100,
+            transport_mode="shuttle",
+            lounge_access="business" if loyalty_tier == LoyaltyTier.FREQUENT_TRAVELLER else "none",
+            meal_voucher_eur=0 if loyalty_tier == LoyaltyTier.FREQUENT_TRAVELLER else 15,
+            rebooking_scope="lh_group",
+            upgrade_eligible=False,
+        )
+
+    # Premium Economy (no special status)
+    if cabin == CabinClass.PREMIUM_ECONOMY:
+        return ServiceLevel(
+            priority_score=priority_score,
+            hotel_stars=3,
+            hotel_budget_eur=100,
+            transport_mode="shuttle",
+            lounge_access="none",
+            meal_voucher_eur=15,
+            rebooking_scope="lh_group",
+            upgrade_eligible=False,
+        )
+
+    # Economy discounted, no status — baseline
+    return ServiceLevel(
+        priority_score=priority_score,
+        hotel_stars=3,
+        hotel_budget_eur=80,
+        transport_mode="shuttle",
+        lounge_access="none",
+        meal_voucher_eur=12,
+        rebooking_scope="lh_group",
+        upgrade_eligible=False,
     )
 
 
