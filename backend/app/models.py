@@ -137,10 +137,23 @@ _BOOKING_TO_CABIN: dict[BookingClass, CabinClass] = {
 # Full-fare economy booking classes (higher priority than discounted)
 _FULL_FARE_ECONOMY = {BookingClass.Y, BookingClass.B}
 
+# LH API cabin codes used by the seatmap and lounge endpoints.
+_CABIN_TO_LH_API: dict[CabinClass, str] = {
+    CabinClass.FIRST: "F",
+    CabinClass.BUSINESS: "C",
+    CabinClass.PREMIUM_ECONOMY: "E",
+    CabinClass.ECONOMY: "M",
+}
+
 
 def cabin_class_from_booking(booking_class: BookingClass) -> CabinClass:
     """Derive the cabin class from a Lufthansa booking class code."""
     return _BOOKING_TO_CABIN.get(booking_class, CabinClass.ECONOMY)
+
+
+def lh_api_cabin_code(cabin: CabinClass) -> str:
+    """Return the single-letter cabin code the LH API expects (F/C/E/M)."""
+    return _CABIN_TO_LH_API.get(cabin, "M")
 
 
 # --- Core Models ---

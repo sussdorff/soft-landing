@@ -25,7 +25,9 @@ from app.models import (
     DisruptionType,
     LoyaltyTier,
     RebookCandidate,
+    cabin_class_from_booking,
     compute_service_level,
+    lh_api_cabin_code,
 )
 from app.ports.flight_data import FlightDataPort
 from app.ports.grounding import GroundingPort
@@ -187,12 +189,13 @@ class OptionGenerator:
         filtered = await self._filter_cancelled(tuples_only, date_str)
 
         # 6. Check seat availability for first 3
+        cabin_code = lh_api_cabin_code(cabin_class_from_booking(booking_class))
         results: list[RebookCandidate] = []
         for i, t in enumerate(filtered):
             seat_available: bool | None = None
             if i < 3:
                 seat_data = await self._flight_data.get_seat_map(
-                    t[0], t[1], t[2], date_str, "M",
+                    t[0], t[1], t[2], date_str, cabin_code,
                 )
                 seat_available = bool(seat_data)
 

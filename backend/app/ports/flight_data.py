@@ -92,7 +92,7 @@ class FlightDataPort(ABC):
             origin: 3-letter IATA origin code.
             destination: 3-letter IATA destination code.
             date: Departure date in yyyy-MM-dd format.
-            cabin_class: IATA cabin code (F/C/M/Y).
+            cabin_class: LH API cabin code (F/C/E/M).
 
         Returns:
             Parsed seat-map resource.  Empty dict on failure.

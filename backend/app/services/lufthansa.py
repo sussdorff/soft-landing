@@ -247,7 +247,7 @@ class LufthansaClient:
             origin: 3-Buchstaben IATA Abflughafen
             destination: 3-Buchstaben IATA Zielflughafen
             date: Abflugdatum (yyyy-MM-dd)
-            cabin_class: IATA Kabinenklasse (F/C/M/Y)
+            cabin_class: LH API Kabinenklasse (F/C/E/M)
 
         Returns:
             Parsed JSON der SeatAvailabilityResource
