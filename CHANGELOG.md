@@ -9,11 +9,39 @@ and this project uses [CalVer](https://calver.org/) versioning (YYYY.0M.MICRO).
 
 ### Added
 
+- **infra**: Docker-based CI/CD with GHCR
+
+### Changed
+
+- **backend**: Introduce Ports & Adapters architecture
+
+### Documentation
+
+- Add dashboard API integration reference
+
+## [2026.02.5] - 2026-02-28
+
+### Added
+
+- **dashboard**: Add keyboard shortcuts for gate agent workflow
+- **dashboard**: Connect to real backend API
 - **backend**: Add status-based passenger differentiation and wire all external APIs
+
+### Documentation
+
+- Update changelog
+
+### Fixed
+
+- **dashboard**: Handle null disruptionId loading state
+- **infra**: Remove duplicate CORS headers from Caddy
+- Add base path for dashboard subdirectory deployment
 
 ### Maintenance
 
+- Build dashboard in GitHub Actions and fix Caddy path handling
 - Add lufthansa-api skill for LH Open API queries
+- Bump version to 2026.02.5
 
 ## [2026.02.4] - 2026-02-28
 
