@@ -12,9 +12,12 @@ softlanding.sussdorff.de {
         reverse_proxy localhost:3001
     }
 
-    # Gate Agent Dashboard
+    # Gate Agent Dashboard (static files, SPA fallback)
     handle /dashboard/* {
-        reverse_proxy localhost:3000
+        root * /opt/softlanding/dashboard
+        uri strip_prefix /dashboard
+        try_files {path} /index.html
+        file_server
     }
 
     # Passenger App (KMP/WASM)

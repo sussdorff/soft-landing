@@ -1,0 +1,123 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 627.8035 845.2" width="627.8035" height="845.2" style="--bg:#f5f5f5;--fg:#333333;background:var(--bg)">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap');
+  text { font-family: 'Inter', system-ui, sans-serif; }
+  svg {
+    /* Derived from --bg and --fg (overridable via --line, --accent, etc.) */
+    --_text:          var(--fg);
+    --_text-sec:      var(--muted, color-mix(in srgb, var(--fg) 60%, var(--bg)));
+    --_text-muted:    var(--muted, color-mix(in srgb, var(--fg) 40%, var(--bg)));
+    --_text-faint:    color-mix(in srgb, var(--fg) 25%, var(--bg));
+    --_line:          var(--line, color-mix(in srgb, var(--fg) 50%, var(--bg)));
+    --_arrow:         var(--accent, color-mix(in srgb, var(--fg) 85%, var(--bg)));
+    --_node-fill:     var(--surface, color-mix(in srgb, var(--fg) 3%, var(--bg)));
+    --_node-stroke:   var(--border, color-mix(in srgb, var(--fg) 20%, var(--bg)));
+    --_group-fill:    var(--bg);
+    --_group-hdr:     color-mix(in srgb, var(--fg) 5%, var(--bg));
+    --_inner-stroke:  color-mix(in srgb, var(--fg) 12%, var(--bg));
+    --_key-badge:     color-mix(in srgb, var(--fg) 10%, var(--bg));
+  }
+</style>
+<defs>
+  <marker id="arrowhead" markerWidth="8" markerHeight="5" refX="7" refY="2.5" orient="auto">
+    <polygon points="0 0, 8 2.5, 0 5" fill="var(--_arrow)" stroke="var(--_arrow)" stroke-width="0.75" stroke-linejoin="round" />
+  </marker>
+  <marker id="arrowhead-start" markerWidth="8" markerHeight="5" refX="1" refY="2.5" orient="auto-start-reverse">
+    <polygon points="8 0, 0 2.5, 8 5" fill="var(--_arrow)" stroke="var(--_arrow)" stroke-width="0.75" stroke-linejoin="round" />
+  </marker>
+</defs>
+<g class="subgraph" data-id="ui" data-label="User Interfaces">
+  <rect x="49.127666666666634" y="40" width="398.804" height="113.80000000000001" rx="0" ry="0" fill="var(--_group-fill)" stroke="var(--_node-stroke)" stroke-width="1" />
+  <rect x="49.127666666666634" y="40" width="398.804" height="28" rx="0" ry="0" fill="var(--_group-hdr)" stroke="var(--_node-stroke)" stroke-width="1" />
+  <text x="61.127666666666634" y="54" font-size="12" font-weight="600" fill="var(--_text-sec)" dy="4.199999999999999">User Interfaces</text>
+</g>
+<g class="subgraph" data-id="backend" data-label="Soft Landing Backend — Python 3.14 + FastAPI">
+  <rect x="50.85358333333332" y="282.1" width="373.11025" height="266.70000000000005" rx="0" ry="0" fill="var(--_group-fill)" stroke="var(--_node-stroke)" stroke-width="1" />
+  <rect x="50.85358333333332" y="282.1" width="373.11025" height="28" rx="0" ry="0" fill="var(--_group-hdr)" stroke="var(--_node-stroke)" stroke-width="1" />
+  <text x="62.85358333333332" y="296.1" font-size="12" font-weight="600" fill="var(--_text-sec)" dy="4.199999999999999">Soft Landing Backend — Python 3.14 + FastAPI</text>
+</g>
+<g class="subgraph" data-id="apis" data-label="External APIs">
+  <rect x="177.8845" y="691.4000000000001" width="409.919" height="113.80000000000001" rx="0" ry="0" fill="var(--_group-fill)" stroke="var(--_node-stroke)" stroke-width="1" />
+  <rect x="177.8845" y="691.4000000000001" width="409.919" height="28" rx="0" ry="0" fill="var(--_group-hdr)" stroke="var(--_node-stroke)" stroke-width="1" />
+  <text x="189.8845" y="705.4000000000001" font-size="12" font-weight="600" fill="var(--_text-sec)" dy="4.199999999999999">External APIs</text>
+</g>
+<polyline class="edge" data-from="dash" data-to="ws" data-style="solid" data-arrow-start="true" data-arrow-end="true" data-label="WebSocket + REST" points="337.59766666666667,137.8 337.59766666666667,195.8 295.75666666666666,195.8 295.75666666666666,264.1 235.94349999999994,264.1 235.94349999999997,326.1" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" marker-start="url(#arrowhead-start)" />
+<polyline class="edge" data-from="mob" data-to="ws" data-style="solid" data-arrow-start="true" data-arrow-end="true" data-label="WebSocket + REST" points="140.19566666666663,137.8 140.19566666666663,195.8 156.5308333333333,195.8 156.5308333333333,264.1 190.83816666666664,264.1 190.83816666666664,326.1" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" marker-start="url(#arrowhead-start)" />
+<polyline class="edge" data-from="optgen" data-to="lh" data-style="solid" data-arrow-start="false" data-arrow-end="true" data-label="flight schedules
+seat availability" points="360.6355,532.8000000000001 360.63550000000004,590.8000000000001 476.7690416666667,590.8000000000001 476.7690416666667,673.4000000000001 487.10249999999996,673.4000000000001 487.10249999999996,735.4000000000001" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="optgen" data-to="gemini" data-style="solid" data-arrow-start="false" data-arrow-end="true" data-label="hotel search
+ground transport" points="313.30716666666666,532.8000000000001 313.30716666666666,590.8000000000001 336.236,590.8000000000001 336.236,673.4000000000001 314.22916666666663,673.4000000000001 314.22916666666663,735.4000000000001" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="engine" data-to="gemini" data-style="solid" data-arrow-start="false" data-arrow-end="true" data-label="disruption context
+weather, NOTAMs" points="271.56991666666664,447.90000000000003 271.56991666666664,459.90000000000003 254.9788333333333,459.90000000000003 254.97883333333334,590.8000000000001 232.05,590.8000000000001 232.05,673.4000000000001 254.05683333333332,673.4000000000001 254.05683333333334,735.4000000000001" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="state" data-to="db" data-style="solid" data-arrow-start="false" data-arrow-end="false" points="130.80658333333332,447.90000000000003 130.80658333333332,590.8000000000001 98.025,590.8000000000001 98.025,602.8000000000001" fill="none" stroke="var(--_line)" stroke-width="1" />
+<polyline class="edge" data-from="ws" data-to="engine" data-style="solid" data-arrow-start="false" data-arrow-end="false" points="213.3908333333333,363 213.3908333333333,387 295.9750833333333,387 295.9750833333333,411" fill="none" stroke="var(--_line)" stroke-width="1" />
+<polyline class="edge" data-from="ws" data-to="state" data-style="solid" data-arrow-start="false" data-arrow-end="false" points="213.3908333333333,363 213.3908333333333,387 130.80658333333332,387 130.80658333333332,411" fill="none" stroke="var(--_line)" stroke-width="1" />
+<polyline class="edge" data-from="engine" data-to="optgen" data-style="solid" data-arrow-start="false" data-arrow-end="false" points="320.38024999999993,447.90000000000003 320.38024999999993,459.90000000000003 336.9713333333333,459.90000000000003 336.9713333333333,495.90000000000003" fill="none" stroke="var(--_line)" stroke-width="1" />
+<g class="edge-label" data-from="dash" data-to="ws" data-label="WebSocket + REST">
+  <rect x="240.7566666666666" y="202.8" width="109.72" height="30.3" rx="2" ry="2" fill="var(--bg)" stroke="var(--_inner-stroke)" stroke-width="1" />
+  <text x="295.6166666666666" y="217.95000000000002" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-sec)" dy="3.8499999999999996">WebSocket + REST</text>
+</g>
+<g class="edge-label" data-from="mob" data-to="ws" data-label="WebSocket + REST">
+  <rect x="101.53083333333332" y="202.8" width="109.72" height="30.3" rx="2" ry="2" fill="var(--bg)" stroke="var(--_inner-stroke)" stroke-width="1" />
+  <text x="156.39083333333332" y="217.95000000000002" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-sec)" dy="3.8499999999999996">WebSocket + REST</text>
+</g>
+<g class="edge-label" data-from="optgen" data-to="lh" data-label="flight schedules
+seat availability">
+  <rect x="431.2690416666667" y="597.8000000000001" width="90.71200000000002" height="44.6" rx="2" ry="2" fill="var(--bg)" stroke="var(--_inner-stroke)" stroke-width="1" />
+  <text x="476.6250416666667" y="620.1" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-sec)"><tspan x="476.6250416666667" dy="-3.3000000000000007">flight schedules</tspan><tspan x="476.6250416666667" dy="14.3">seat availability</tspan></text>
+</g>
+<g class="edge-label" data-from="optgen" data-to="gemini" data-label="hotel search
+ground transport">
+  <rect x="287.236" y="597.8000000000001" width="97.84000000000003" height="44.6" rx="2" ry="2" fill="var(--bg)" stroke="var(--_inner-stroke)" stroke-width="1" />
+  <text x="336.156" y="620.1" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-sec)"><tspan x="336.156" dy="-3.3000000000000007">hotel search</tspan><tspan x="336.156" dy="14.3">ground transport</tspan></text>
+</g>
+<g class="edge-label" data-from="engine" data-to="gemini" data-label="disruption context
+weather, NOTAMs">
+  <rect x="180.04999999999998" y="597.8000000000001" width="103.18599999999999" height="44.6" rx="2" ry="2" fill="var(--bg)" stroke="var(--_inner-stroke)" stroke-width="1" />
+  <text x="231.64299999999997" y="620.1" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-sec)"><tspan x="231.64299999999997" dy="-3.3000000000000007">disruption context</tspan><tspan x="231.64299999999997" dy="14.3">weather, NOTAMs</tspan></text>
+</g>
+<g class="node" data-id="db" data-label="PostgreSQL" data-shape="cylinder">
+  <rect x="40" y="609.8000000000001" width="116.04999999999998" height="36.900000000000006" fill="#c4b5fd" stroke="none" />
+  <line x1="40" y1="609.8000000000001" x2="40" y2="646.7" stroke="#7c3aed" stroke-width="0.75" />
+  <line x1="156.04999999999998" y1="609.8000000000001" x2="156.04999999999998" y2="646.7" stroke="#7c3aed" stroke-width="0.75" />
+  <ellipse cx="98.02499999999999" cy="646.7" rx="58.02499999999999" ry="7" fill="#c4b5fd" stroke="#7c3aed" stroke-width="0.75" />
+  <ellipse cx="98.02499999999999" cy="609.8000000000001" rx="58.02499999999999" ry="7" fill="#c4b5fd" stroke="#7c3aed" stroke-width="0.75" />
+  <text x="98.02499999999999" y="628.2500000000001" text-anchor="middle" font-size="13" font-weight="500" fill="#1e1e1e" dy="4.55">PostgreSQL</text>
+</g>
+<g class="node" data-id="dash" data-label="Airline Agent Dashboard
+&lt;i&gt;React + TypeScript + Vite&lt;/i&gt;" data-shape="rectangle">
+  <rect x="243.26366666666667" y="84" width="188.66799999999995" height="53.800000000000004" rx="0" ry="0" fill="#93c5fd" stroke="#2563eb" stroke-width="0.75" />
+  <text x="337.59766666666667" y="110.9" text-anchor="middle" font-size="13" font-weight="500" fill="#1e1e1e"><tspan x="337.59766666666667" dy="-3.9000000000000012">Airline Agent Dashboard</tspan><tspan x="337.59766666666667" dy="16.900000000000002"><tspan font-style="italic">React + TypeScript + Vite</tspan></tspan></text>
+</g>
+<g class="node" data-id="mob" data-label="Passenger App
+&lt;i&gt;Kotlin Multiplatform&lt;/i&gt;" data-shape="rectangle">
+  <rect x="65.12766666666664" y="84" width="150.136" height="53.800000000000004" rx="0" ry="0" fill="#93c5fd" stroke="#2563eb" stroke-width="0.75" />
+  <text x="140.19566666666663" y="110.9" text-anchor="middle" font-size="13" font-weight="500" fill="#1e1e1e"><tspan x="140.19566666666663" dy="-3.9000000000000012">Passenger App</tspan><tspan x="140.19566666666663" dy="16.900000000000002"><tspan font-style="italic">Kotlin Multiplatform</tspan></tspan></text>
+</g>
+<g class="node" data-id="engine" data-label="Disruption Engine" data-shape="rectangle">
+  <rect x="222.75958333333332" y="411" width="146.43099999999998" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="295.9750833333333" y="429.45" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">Disruption Engine</text>
+</g>
+<g class="node" data-id="optgen" data-label="Option Generator" data-shape="rectangle">
+  <rect x="265.97883333333334" y="495.90000000000003" width="141.985" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="336.97133333333335" y="514.35" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">Option Generator</text>
+</g>
+<g class="node" data-id="state" data-label="State Manager" data-shape="rectangle">
+  <rect x="66.85358333333332" y="411" width="127.906" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="130.80658333333332" y="429.45" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">State Manager</text>
+</g>
+<g class="node" data-id="ws" data-label="WebSocket Hub" data-shape="rectangle">
+  <rect x="145.7328333333333" y="326.1" width="135.31599999999997" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="213.3908333333333" y="344.55" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">WebSocket Hub</text>
+</g>
+<g class="node" data-id="lh" data-label="Lufthansa API
+&lt;i&gt;Structured Flight Data&lt;/i&gt;" data-shape="rectangle">
+  <rect x="402.4015" y="735.4000000000001" width="169.402" height="53.800000000000004" rx="0" ry="0" fill="#fde68a" stroke="#f59e0b" stroke-width="0.75" />
+  <text x="487.10249999999996" y="762.3000000000001" text-anchor="middle" font-size="13" font-weight="500" fill="#1e1e1e"><tspan x="487.10249999999996" dy="-3.9000000000000012">Lufthansa API</tspan><tspan x="487.10249999999996" dy="16.900000000000002"><tspan font-style="italic">Structured Flight Data</tspan></tspan></text>
+</g>
+<g class="node" data-id="gemini" data-label="Gemini + Google Search
+&lt;i&gt;AI-Powered Grounding&lt;/i&gt;" data-shape="rectangle">
+  <rect x="193.8845" y="735.4000000000001" width="180.51699999999997" height="53.800000000000004" rx="0" ry="0" fill="#a7f3d0" stroke="#10b981" stroke-width="0.75" />
+  <text x="284.143" y="762.3000000000001" text-anchor="middle" font-size="13" font-weight="500" fill="#1e1e1e"><tspan x="284.143" dy="-3.9000000000000012">Gemini + Google Search</tspan><tspan x="284.143" dy="16.900000000000002"><tspan font-style="italic">AI-Powered Grounding</tspan></tspan></text>
+</g>
+</svg>

@@ -21,7 +21,6 @@ REMOTE_DIR="/opt/softlanding"
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 BACKEND_IMAGE="ghcr.io/sussdorff/soft-landing-backend:latest"
-DASHBOARD_IMAGE="ghcr.io/sussdorff/soft-landing-dashboard:latest"
 DOCS_IMAGE="ghcr.io/sussdorff/soft-landing-docs:latest"
 LANDING_IMAGE="ghcr.io/sussdorff/soft-landing-landing:latest"
 PASSENGER_APP_IMAGE="ghcr.io/sussdorff/soft-landing-passenger-app:latest"
@@ -46,8 +45,13 @@ deploy_backend() {
 }
 
 deploy_dashboard() {
-  build_and_push "${REPO_ROOT}/dashboard" "${DASHBOARD_IMAGE}" "dashboard"
-  ssh "${SERVER}" "cd ${REMOTE_DIR} && docker compose up -d dashboard"
+  echo "==> Building dashboard locally"
+  (cd "${REPO_ROOT}/dashboard" && npm ci && npm run build)
+  echo "==> Uploading dashboard to server"
+  ssh "${SERVER}" "mkdir -p ${REMOTE_DIR}/dashboard"
+  rsync -a --delete "${REPO_ROOT}/dashboard/dist/" "${SERVER}:${REMOTE_DIR}/dashboard/"
+  echo "==> Reloading Caddy"
+  ssh "${SERVER}" "cd ${REMOTE_DIR} && docker compose exec caddy caddy reload --config /etc/caddy/Caddyfile" 2>/dev/null || true
   echo "    Dashboard deployed"
 }
 

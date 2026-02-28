@@ -20,12 +20,6 @@ services:
     depends_on:
       - postgres
 
-  dashboard:
-    image: ghcr.io/sussdorff/soft-landing-dashboard:latest
-    restart: unless-stopped
-    ports:
-      - "127.0.0.1:3000:80"
-
   docs:
     image: ghcr.io/sussdorff/soft-landing-docs:latest
     restart: unless-stopped
