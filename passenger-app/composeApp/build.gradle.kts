@@ -72,6 +72,11 @@ kotlin {
             implementation(libs.jetbrains.navigation3.ui)
             implementation(libs.jetbrains.lifecycle.viewmodel.nav3)
             implementation(libs.jetbrains.lifecycle.viewmodel)
+            
+            implementation(libs.ktor.client.logging)
+            implementation(libs.ktor.client.content.negotiation)
+            implementation(libs.ktor.serialization.kotlinx.json)
+            implementation(libs.ktor.client.cio)
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
@@ -83,4 +88,9 @@ kotlin {
             implementation(libs.ktor.client.js)
         }
     }
+}
+
+// Fix for "Could not infer iOS target architectures" when running Gradle tasks outside of Xcode
+tasks.matching { it.name == "syncComposeResourcesForIos" }.configureEach {
+    onlyIf { System.getenv("SDK_NAME") != null }
 }

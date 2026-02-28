@@ -29,6 +29,8 @@ coreSplashscreen = "1.2.0"
 uiToolingPreview = "1.10.0"
 uuid = "0.8.4"
 adaptive = "1.2.0"
+timber = "5.0.1"
+
 
 # For Compose Multiplatform Navigation 3
 cmpNavigation3 = "1.0.0-alpha06"
@@ -87,6 +89,12 @@ uuid = { module = "com.benasher44:uuid", version.ref = "uuid" }
 jetbrains-navigation3-ui = { module = "org.jetbrains.androidx.navigation3:navigation3-ui", version.ref = "cmpNavigation3" }
 jetbrains-lifecycle-viewmodel-nav3 = { module = "org.jetbrains.androidx.lifecycle:lifecycle-viewmodel-navigation3", version.ref = "androidx-lifecycle" }
 jetbrains-lifecycle-viewmodel = { module = "org.jetbrains.androidx.lifecycle:lifecycle-viewmodel", version.ref = "androidx-lifecycle" }
+timber = { module = "com.jakewharton.timber:timber", version.ref = "timber" }
+
+ktor-client-logging = { module = "io.ktor:ktor-client-logging", version.ref = "ktor" }
+ktor-client-content-negotiation = { module = "io.ktor:ktor-client-content-negotiation", version.ref = "ktor" }
+ktor-serialization-kotlinx-json = { module = "io.ktor:ktor-serialization-kotlinx-json", version.ref = "ktor" }
+ktor-client-cio = { module = "io.ktor:ktor-client-cio", version.ref = "ktor" }
 
 # iOS Specific:
 ktor-client-darwin = { module = "io.ktor:ktor-client-darwin", version.ref = "ktor" }
