@@ -1,5 +1,9 @@
+import { useState } from "react";
 import type { Wish, Passenger, Option } from "../types";
 import { WishCard } from "./WishCard";
+import { ResolvedCard } from "./ResolvedCard";
+
+type SubTab = "incoming" | "resolved";
 
 interface Props {
   pendingWishes: Wish[];
@@ -9,6 +13,8 @@ interface Props {
   onApprove: (wishId: string) => void;
   onDeny: (wishId: string, reason: string) => void;
   onViewProfile: (passengerId: string) => void;
+  onResolve: (passengerId: string, optionId: string) => Promise<void>;
+  onRefreshOptions: (passengerId: string) => Promise<Option[]>;
 }
 
 export function WishStream({
@@ -19,7 +25,10 @@ export function WishStream({
   onApprove,
   onDeny,
   onViewProfile,
+  onResolve,
+  onRefreshOptions,
 }: Props) {
+  const [subTab, setSubTab] = useState<SubTab>("incoming");
   const paxMap = new Map(passengers.map((p) => [p.id, p]));
 
   function getSelectedOption(wish: Wish): Option | undefined {
@@ -39,31 +48,54 @@ export function WishStream({
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="flex items-center justify-between px-5 py-3 border-b border-surface-600">
-        <div className="flex items-center gap-2">
+      {/* Header with sub-tabs */}
+      <div className="px-5 py-3 border-b border-surface-600">
+        <div className="flex items-center justify-between mb-3">
           <h2 className="text-sm font-semibold text-text-primary">
             Passenger Wishes
           </h2>
-          {pendingWishes.length > 0 && (
-            <span className="px-1.5 py-0.5 text-[10px] font-mono font-bold rounded-full bg-accent-blue/20 text-accent-blue tabular-nums">
-              {pendingWishes.length}
-            </span>
-          )}
+          <span className="text-[10px] font-mono text-text-muted uppercase tracking-wider">
+            Live Stream
+          </span>
         </div>
-        <span className="text-[10px] font-mono text-text-muted uppercase tracking-wider">
-          Live Stream
-        </span>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setSubTab("incoming")}
+            className={`px-4 py-1.5 text-xs font-semibold rounded-md transition-all cursor-pointer ${
+              subTab === "incoming"
+                ? "bg-surface-600 text-text-primary"
+                : "text-text-muted hover:text-text-secondary hover:bg-surface-700"
+            }`}
+          >
+            Incoming
+            {pendingWishes.length > 0 && (
+              <span className="ml-1.5 px-1.5 py-0.5 text-[10px] font-mono font-bold rounded-full bg-accent-blue/20 text-accent-blue tabular-nums">
+                {pendingWishes.length}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setSubTab("resolved")}
+            className={`px-4 py-1.5 text-xs font-semibold rounded-md transition-all cursor-pointer ${
+              subTab === "resolved"
+                ? "bg-surface-600 text-text-primary"
+                : "text-text-muted hover:text-text-secondary hover:bg-surface-700"
+            }`}
+          >
+            Resolved
+            {resolvedWishes.length > 0 && (
+              <span className="ml-1.5 px-1.5 py-0.5 text-[10px] font-mono font-bold rounded-full bg-surface-500 text-text-secondary tabular-nums">
+                {resolvedWishes.length}
+              </span>
+            )}
+          </button>
+        </div>
       </div>
 
-      {/* Wish list */}
+      {/* Content */}
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
-        {/* Pending section */}
-        {sortedPending.length > 0 && (
+        {subTab === "incoming" && (
           <>
-            <div className="text-[10px] font-mono text-text-muted uppercase tracking-wider mb-2">
-              Pending ({sortedPending.length})
-            </div>
             {sortedPending.map((wish) => (
               <WishCard
                 key={wish.id}
@@ -75,34 +107,36 @@ export function WishStream({
                 onViewProfile={onViewProfile}
               />
             ))}
+            {sortedPending.length === 0 && (
+              <div className="flex flex-col items-center justify-center h-40 text-text-muted text-sm">
+                <div className="text-2xl mb-2">—</div>
+                No pending wishes
+              </div>
+            )}
           </>
         )}
 
-        {/* Resolved section */}
-        {resolvedWishes.length > 0 && (
+        {subTab === "resolved" && (
           <>
-            <div className="text-[10px] font-mono text-text-muted uppercase tracking-wider mt-4 mb-2">
-              Resolved ({resolvedWishes.length})
-            </div>
             {resolvedWishes.map((wish) => (
-              <WishCard
+              <ResolvedCard
                 key={wish.id}
                 wish={wish}
                 passenger={paxMap.get(wish.passengerId)}
                 selectedOption={getSelectedOption(wish)}
-                onApprove={onApprove}
-                onDeny={onDeny}
+                allOptions={optionsByPassenger.get(wish.passengerId) ?? []}
                 onViewProfile={onViewProfile}
+                onResolve={onResolve}
+                onRefreshOptions={onRefreshOptions}
               />
             ))}
+            {resolvedWishes.length === 0 && (
+              <div className="flex flex-col items-center justify-center h-40 text-text-muted text-sm">
+                <div className="text-2xl mb-2">—</div>
+                No resolved passengers yet
+              </div>
+            )}
           </>
-        )}
-
-        {pendingWishes.length === 0 && resolvedWishes.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-40 text-text-muted text-sm">
-            <div className="text-2xl mb-2">—</div>
-            No wishes submitted yet
-          </div>
         )}
       </div>
     </div>

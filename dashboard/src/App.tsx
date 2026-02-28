@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { Layout } from "./components/Layout";
 import { OverviewPanel } from "./components/OverviewPanel";
 import { FlightOverview } from "./components/FlightOverview";
@@ -135,6 +135,12 @@ function App() {
     return map;
   }, [wishes]);
 
+  // Fetch fresh options for a passenger (for editing resolved cases)
+  const refreshOptions = useCallback(async (passengerId: string) => {
+    const profile = await api.getPassengerProfile(passengerId);
+    return profile.options;
+  }, []);
+
   if (!disruptionId || loading) {
     return (
       <Layout>
@@ -217,6 +223,8 @@ function App() {
               onApprove={approve}
               onDeny={deny}
               onViewProfile={setProfileId}
+              onResolve={resolveManually}
+              onRefreshOptions={refreshOptions}
             />
           )}
         </div>
