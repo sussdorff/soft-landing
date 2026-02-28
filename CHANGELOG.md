@@ -9,7 +9,21 @@ and this project uses [CalVer](https://calver.org/) versioning (YYYY.0M.MICRO).
 
 ### Added
 
+- **backend**: Live LH API integration for rebook validation
+
+## [2026.02.7] - 2026-02-28
+
+### Added
+
 - Close 6 dashboard API gaps (list, bulk options, WS handlers, resolve, profile)
+
+### Documentation
+
+- Update changelog
+
+### Maintenance
+
+- Bump version to 2026.02.7
 
 ## [2026.02.6] - 2026-02-28
 
