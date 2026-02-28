@@ -5,12 +5,12 @@ softlanding.sussdorff.de {
 
     # User documentation (MkDocs Material)
     handle_path /docs/* {
-        reverse_proxy docs:80
+        reverse_proxy localhost:3001
     }
 
-    # Gate Agent Dashboard (nginx container handles /dashboard/ prefix)
+    # Gate Agent Dashboard
     handle /dashboard/* {
-        reverse_proxy dashboard:80
+        reverse_proxy localhost:3000
     }
 
     # Passenger App (KMP/Web target — not yet built)
@@ -20,10 +20,10 @@ softlanding.sussdorff.de {
 
     # Backend API — everything else goes to FastAPI
     handle {
-        reverse_proxy backend:8000
+        reverse_proxy localhost:8000
     }
 }
 
 get-softlanding.sussdorff.de {
-    reverse_proxy landing:80
+    reverse_proxy localhost:3002
 }

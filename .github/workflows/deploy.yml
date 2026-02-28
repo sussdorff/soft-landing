@@ -1,22 +1,20 @@
-name: Build & Deploy
+name: Deploy
 
 on:
   push:
     branches: [main]
 
 env:
-  REGISTRY: ghcr.io
-  BACKEND_IMAGE: ghcr.io/sussdorff/soft-landing-backend
-  DASHBOARD_IMAGE: ghcr.io/sussdorff/soft-landing-dashboard
-  DOCS_IMAGE: ghcr.io/sussdorff/soft-landing-docs
-  LANDING_IMAGE: ghcr.io/sussdorff/soft-landing-landing
+  SERVER: root@46.224.137.140
+  REMOTE_DIR: /opt/softlanding
+  BACKEND_IMAGE: ghcr.io/sussdorff/soft-landing-backend:latest
+  DASHBOARD_IMAGE: ghcr.io/sussdorff/soft-landing-dashboard:latest
+  DOCS_IMAGE: ghcr.io/sussdorff/soft-landing-docs:latest
+  LANDING_IMAGE: ghcr.io/sussdorff/soft-landing-landing:latest
 
 jobs:
-  build-and-push:
+  deploy:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
 
     steps:
       - uses: actions/checkout@v4
@@ -29,68 +27,6 @@ jobs:
         with:
           platforms: linux/arm64
 
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push backend
-        uses: docker/build-push-action@v6
-        with:
-          context: backend
-          platforms: linux/arm64
-          push: true
-          tags: |
-            ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
-            ${{ env.BACKEND_IMAGE }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Build and push dashboard
-        uses: docker/build-push-action@v6
-        with:
-          context: dashboard
-          platforms: linux/arm64
-          push: true
-          tags: |
-            ${{ env.DASHBOARD_IMAGE }}:${{ github.sha }}
-            ${{ env.DASHBOARD_IMAGE }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Build and push docs
-        uses: docker/build-push-action@v6
-        with:
-          context: docs
-          platforms: linux/arm64
-          push: true
-          tags: |
-            ${{ env.DOCS_IMAGE }}:${{ github.sha }}
-            ${{ env.DOCS_IMAGE }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Build and push landing
-        uses: docker/build-push-action@v6
-        with:
-          context: landing
-          platforms: linux/arm64
-          push: true
-          tags: |
-            ${{ env.LANDING_IMAGE }}:${{ github.sha }}
-            ${{ env.LANDING_IMAGE }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-  deploy:
-    needs: build-and-push
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
       - name: Setup SSH key
         run: |
           mkdir -p ~/.ssh
@@ -98,18 +34,39 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H 46.224.137.140 >> ~/.ssh/known_hosts
 
-      - name: Deploy docker-compose.yml and Caddyfile
-        run: |
-          scp docker-compose.prod.yml root@46.224.137.140:/opt/softlanding/docker-compose.yml
-          scp infra/Caddyfile root@46.224.137.140:/opt/softlanding/Caddyfile
+      - name: Deploy docker-compose.yml
+        run: scp docker-compose.prod.yml ${{ env.SERVER }}:${{ env.REMOTE_DIR }}/docker-compose.yml
 
-      - name: Pull and restart containers
+      - name: Build and push backend
         run: |
-          ssh root@46.224.137.140 bash << 'EOF'
-          cd /opt/softlanding
-          docker compose pull
-          docker compose up -d
-          EOF
+          docker buildx build --platform linux/arm64 \
+            -t ${{ env.BACKEND_IMAGE }} \
+            --output type=docker,dest=- \
+            backend/ | ssh ${{ env.SERVER }} docker load
+
+      - name: Build and push dashboard
+        run: |
+          docker buildx build --platform linux/arm64 \
+            -t ${{ env.DASHBOARD_IMAGE }} \
+            --output type=docker,dest=- \
+            dashboard/ | ssh ${{ env.SERVER }} docker load
+
+      - name: Build and push docs
+        run: |
+          docker buildx build --platform linux/arm64 \
+            -t ${{ env.DOCS_IMAGE }} \
+            --output type=docker,dest=- \
+            docs/ | ssh ${{ env.SERVER }} docker load
+
+      - name: Build and push landing
+        run: |
+          docker buildx build --platform linux/arm64 \
+            -t ${{ env.LANDING_IMAGE }} \
+            --output type=docker,dest=- \
+            landing/ | ssh ${{ env.SERVER }} docker load
+
+      - name: Restart services
+        run: ssh ${{ env.SERVER }} "cd ${{ env.REMOTE_DIR }} && docker compose up -d"
 
       - name: Verify deployment
         run: |
