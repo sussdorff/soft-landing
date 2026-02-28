@@ -227,6 +227,20 @@ class SqlDisruptionRepository(DisruptionRepository):
             pax.sort(key=lambda p: (-p.priority, p.name))
             return pax
 
+    async def find_disruption_by_flight(
+        self, flight_number: str,
+    ) -> Disruption | None:
+        async with self._session_factory() as session:
+            stmt = (
+                select(DisruptionRow)
+                .where(DisruptionRow.flight_number == flight_number)
+                .options(selectinload(DisruptionRow.passengers))
+                .order_by(DisruptionRow.detected_at.desc())
+                .limit(1)
+            )
+            row = (await session.execute(stmt)).scalar_one_or_none()
+            return _row_to_disruption(row) if row else None
+
     async def list_disruptions(self) -> list[Disruption]:
         async with self._session_factory() as session:
             stmt = (

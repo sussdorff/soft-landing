@@ -473,6 +473,40 @@ async def get_schedules(request: Request, origin: str, destination: str, date: s
     return await flight_data.get_schedules(origin, destination, flight_date)
 
 
+# --- Disruption explanation (Gemini Search grounding) ---
+
+@app.get("/flights/{flight_number}/explain-disruption")
+async def explain_flight_disruption(request: Request, flight_number: str):
+    """Explain in clear language why a disruption is happening for a flight.
+
+    Looks up the most recent disruption for the given flight number and
+    uses Gemini with Google Search grounding to generate a real-time,
+    passenger-friendly explanation.
+    """
+    dis = await request.app.state.disruption_repo.find_disruption_by_flight(flight_number)
+    if not dis:
+        raise HTTPException(404, f"No disruption found for flight {flight_number}")
+
+    grounding: GroundingPort = request.app.state.grounding
+    explanation = await grounding.explain_disruption(
+        disruption_type=dis.type.value,
+        flight_number=dis.flight_number,
+        origin=dis.origin,
+        destination=dis.destination,
+        raw_reason=dis.reason,
+    )
+
+    return {
+        "flightNumber": dis.flight_number,
+        "disruptionId": dis.id,
+        "disruptionType": dis.type.value,
+        "origin": dis.origin,
+        "destination": dis.destination,
+        "reason": dis.reason,
+        "explanation": explanation,
+    }
+
+
 # --- Flight context (Gemini Search grounding) ---
 
 @app.get("/flights/{flight_number}/context")

@@ -102,6 +102,19 @@ class DisruptionRepository(ABC):
         """
 
     @abstractmethod
+    async def find_disruption_by_flight(
+        self, flight_number: str,
+    ) -> Disruption | None:
+        """Find the most recent disruption for a given flight number.
+
+        Args:
+            flight_number: IATA flight number (e.g. "LH1234").
+
+        Returns:
+            The most recent disruption, or None if no disruption exists.
+        """
+
+    @abstractmethod
     async def list_disruptions(self) -> list[Disruption]:
         """Fetch all disruptions.
 
