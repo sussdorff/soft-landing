@@ -13,7 +13,7 @@
 - Relevant for ideas around internal airline ops, standby routing, crew tooling, etc.
 
 ### Google Gemini (with Grounding)
-- **Model:** Gemini (organizer referenced "Gemini 3" — likely Gemini 2.0 Flash / Pro or next-gen)
+- **Model:** Gemini 3.0
 - Grounding is a key differentiator the jury wants to see used
 
 #### Grounding with Google Search
@@ -43,7 +43,7 @@ Based on organizer hints:
 
 | Layer | Choice | Notes |
 |-------|--------|-------|
-| LLM | Gemini 2.0 Pro / Flash (with Grounding enabled) | |
+| LLM | Gemini 3.0 (with Grounding enabled) | |
 | Backend | **Python 3.14** | Gemini SDK, agent orchestration |
 | Passenger App | **Kotlin Multiplatform (KMP)** | Targets: Android, iOS, Web. Compiles to native binaries (no runtime layer like Flutter). Can interop with Swift code on iOS. |
 | Gate Agent Dashboard | **React** (web) | WebSocket-based for real-time notifications. Reference: Mira project for WS setup. |

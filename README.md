@@ -1,4 +1,4 @@
-# ReRoute — Passenger Disruption Management
+# Soft Landing — Passenger Disruption Management
 
 > 2026-02-28 — Dual-view system: passenger app (KMP) + gate agent dashboard + backend agent
 
@@ -61,7 +61,7 @@
 ### 1. At-a-Glance Overview
 - All passengers affected by disruption
 - Highlighted: "80% of passengers on flight LH456 will miss their connection"
-- Can instruct passengers at gate: "Please open the ReRoute app for your rebooking options"
+- Can instruct passengers at gate: "Please open the Soft Landing app for your rebooking options"
 
 ### 2. Passenger Wishes Stream In
 - Real-time list of passengers and their chosen preferences
