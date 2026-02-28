@@ -65,6 +65,7 @@ export function FlightOverview({
 }: Props) {
   const [expandedPax, setExpandedPax] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
+  const [headerCollapsed, setHeaderCollapsed] = useState(false);
 
   const toggle = (id: string) => {
     setExpandedPax((prev) => {
@@ -132,17 +133,57 @@ export function FlightOverview({
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="px-5 py-3 border-b border-surface-600 shrink-0">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-3">
-            <h2 className="text-sm font-semibold text-text-primary">
-              Flight Overview
-            </h2>
-            <span className="font-mono text-sm text-text-secondary">
-              {disruption.flightNumber} {disruption.origin} →{" "}
-              {disruption.destination}
+        {/* Disruption summary + impact pills — collapsible */}
+        {!headerCollapsed && (
+          <>
+            <div className="bg-surface-900/50 rounded-md px-4 py-3 mb-3">
+              <p className="text-sm text-text-secondary leading-relaxed">
+                {disruption.explanation}
+              </p>
+            </div>
+            <div className="flex items-center gap-3 mb-3">
+              <ImpactPill
+                color="amber"
+                count={atRisk}
+                label="Connections at risk"
+              />
+              <ImpactPill color="red" count={disrupted} label="Disrupted" />
+              <ImpactPill color="green" count={resolved} label="Resolved" />
+              <ImpactPill color="slate" count={onTrack} label="On track" />
+            </div>
+          </>
+        )}
+
+        {/* Toolbar: search + controls — always visible */}
+        <div className="flex items-center gap-3">
+          <div className="relative flex-1">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted text-xs pointer-events-none">
+              /
             </span>
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by name, PNR, airport, or flight..."
+              className="w-full bg-surface-900/60 border border-surface-600 rounded-md pl-7 pr-3 py-2 text-sm text-text-primary placeholder:text-text-muted/50 font-mono focus:outline-none focus:border-accent-blue/50 focus:ring-1 focus:ring-accent-blue/20 transition-colors"
+            />
+            {search && (
+              <button
+                onClick={() => setSearch("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-secondary text-xs font-mono cursor-pointer"
+              >
+                clear
+              </button>
+            )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => setHeaderCollapsed(!headerCollapsed)}
+              className="text-[10px] font-mono text-text-muted hover:text-text-secondary transition-colors cursor-pointer"
+            >
+              {headerCollapsed ? "Show summary" : "Hide summary"}
+            </button>
+            <span className="text-text-muted">|</span>
             <button
               onClick={expandAll}
               className="text-[10px] font-mono text-text-muted hover:text-text-secondary transition-colors cursor-pointer"
@@ -157,47 +198,6 @@ export function FlightOverview({
               Collapse all
             </button>
           </div>
-        </div>
-
-        {/* Disruption summary */}
-        <div className="bg-surface-900/50 rounded-md px-4 py-3 mb-3">
-          <p className="text-sm text-text-secondary leading-relaxed">
-            {disruption.explanation}
-          </p>
-        </div>
-
-        {/* Impact summary pills */}
-        <div className="flex items-center gap-3">
-          <ImpactPill
-            color="amber"
-            count={atRisk}
-            label="Connections at risk"
-          />
-          <ImpactPill color="red" count={disrupted} label="Disrupted" />
-          <ImpactPill color="green" count={resolved} label="Resolved" />
-          <ImpactPill color="slate" count={onTrack} label="On track" />
-        </div>
-
-        {/* Search */}
-        <div className="relative mt-3">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted text-xs pointer-events-none">
-            /
-          </span>
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by name, PNR, airport, or flight..."
-            className="w-full bg-surface-900/60 border border-surface-600 rounded-md pl-7 pr-3 py-2 text-sm text-text-primary placeholder:text-text-muted/50 font-mono focus:outline-none focus:border-accent-blue/50 focus:ring-1 focus:ring-accent-blue/20 transition-colors"
-          />
-          {search && (
-            <button
-              onClick={() => setSearch("")}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-secondary text-xs font-mono cursor-pointer"
-            >
-              clear
-            </button>
-          )}
         </div>
       </div>
 
