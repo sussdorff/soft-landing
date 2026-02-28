@@ -7,9 +7,28 @@ and this project uses [CalVer](https://calver.org/) versioning (YYYY.0M.MICRO).
 
 ## [Unreleased]
 
+### Added
+
+- **backend**: Enrich approve/deny workflow with cascading impact preview
+
+## [2026.02.11] - 2026-02-28
+
+### Added
+
+- **backend**: Add endpoint to explain flight disruptions via Gemini
+- **infra**: Switch to local build + SSH stream deploy
+
+### Documentation
+
+- Update changelog
+
 ### Fixed
 
 - **backend**: Use correct LH API cabin codes for seat map requests
+
+### Maintenance
+
+- Bump version to 2026.02.11
 
 ## [2026.02.10] - 2026-02-28
 
