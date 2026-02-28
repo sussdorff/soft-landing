@@ -156,21 +156,21 @@ export function WishCard({
 
       {/* Action buttons (only for pending) */}
       {isPending && (
-        <div className="flex items-center gap-2 mt-2">
+        <div className="flex items-center gap-3 mt-3 pt-3 border-t border-surface-600/50">
           <button
             onClick={handleApprove}
             disabled={acting}
-            className="px-3 py-1.5 text-xs font-semibold rounded bg-accent-green/15 text-accent-green hover:bg-accent-green/25 transition-colors disabled:opacity-50 cursor-pointer"
+            className="px-6 py-3 text-sm font-bold rounded-md bg-accent-green text-surface-900 hover:brightness-110 hover:shadow-[0_0_12px_rgba(34,197,94,0.4)] active:scale-95 transition-all disabled:opacity-50 cursor-pointer"
           >
-            {acting ? "..." : "Approve"}
+            {acting ? "..." : "APPROVE"}
           </button>
 
           {!showDenyInput ? (
             <button
               onClick={() => setShowDenyInput(true)}
-              className="px-3 py-1.5 text-xs font-semibold rounded bg-surface-600 text-text-secondary hover:bg-accent-red/15 hover:text-accent-red transition-colors cursor-pointer"
+              className="px-6 py-3 text-sm font-bold rounded-md bg-accent-red/20 text-accent-red border border-accent-red/30 hover:bg-accent-red hover:text-surface-900 hover:shadow-[0_0_12px_rgba(239,68,68,0.3)] active:scale-95 transition-all cursor-pointer"
             >
-              Deny
+              DENY
             </button>
           ) : (
             <div className="flex items-center gap-2 flex-1">
@@ -181,21 +181,21 @@ export function WishCard({
                 onKeyDown={(e) => e.key === "Enter" && handleDeny()}
                 placeholder="Reason for denial..."
                 autoFocus
-                className="flex-1 px-2 py-1.5 text-xs rounded bg-surface-900 border border-surface-500 text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent-red"
+                className="flex-1 px-3 py-3 text-sm rounded-md bg-surface-900 border border-accent-red/40 text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent-red"
               />
               <button
                 onClick={handleDeny}
                 disabled={acting || !denyReason.trim()}
-                className="px-3 py-1.5 text-xs font-semibold rounded bg-accent-red/15 text-accent-red hover:bg-accent-red/25 transition-colors disabled:opacity-50 cursor-pointer"
+                className="px-5 py-3 text-sm font-bold rounded-md bg-accent-red text-surface-900 hover:brightness-110 hover:shadow-[0_0_12px_rgba(239,68,68,0.3)] active:scale-95 transition-all disabled:opacity-50 cursor-pointer"
               >
-                Confirm
+                CONFIRM DENY
               </button>
               <button
                 onClick={() => {
                   setShowDenyInput(false);
                   setDenyReason("");
                 }}
-                className="px-2 py-1.5 text-xs text-text-muted hover:text-text-primary transition-colors cursor-pointer"
+                className="px-3 py-3 text-sm text-text-muted hover:text-text-primary transition-colors cursor-pointer"
               >
                 Cancel
               </button>

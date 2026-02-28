@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import type { Disruption, Passenger, Wish } from "../types";
 
 interface Props {
@@ -8,6 +8,18 @@ interface Props {
   disruptions: Disruption[];
   onSelectDisruption: (id: string) => void;
 }
+
+const TYPE_LABELS: Record<string, string> = {
+  cancellation: "CNX",
+  delay: "DLY",
+  diversion: "DIV",
+};
+
+const TYPE_COLORS: Record<string, string> = {
+  cancellation: "bg-accent-red/20 text-accent-red",
+  delay: "bg-accent-amber/20 text-accent-amber",
+  diversion: "bg-accent-blue/20 text-accent-blue",
+};
 
 export function OverviewPanel({ disruption, passengers, pendingWishes, disruptions, onSelectDisruption }: Props) {
   const [collapsed, setCollapsed] = useState(false);
@@ -23,37 +35,14 @@ export function OverviewPanel({ disruption, passengers, pendingWishes, disruptio
   ).length;
   const connectingPct = affected > 0 ? Math.round((connecting / affected) * 100) : 0;
 
-  const typeColors: Record<string, string> = {
-    cancellation: "bg-accent-red/20 text-accent-red",
-    delay: "bg-accent-amber/20 text-accent-amber",
-    diversion: "bg-accent-blue/20 text-accent-blue",
-  };
-
   return (
     <div className="space-y-2">
-      {/* Flight selector */}
-      {disruptions.length > 1 && (
-        <div className="flex items-center gap-1.5">
-          <span className="text-[10px] font-mono text-text-muted uppercase tracking-wider mr-1">Flights</span>
-          {disruptions.map((d) => (
-            <button
-              key={d.id}
-              onClick={() => onSelectDisruption(d.id)}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-mono transition-colors cursor-pointer ${
-                d.id === disruption.id
-                  ? "bg-surface-700 text-text-primary border border-surface-500"
-                  : "text-text-muted hover:text-text-secondary hover:bg-surface-800"
-              }`}
-            >
-              <span className={`inline-block px-1.5 py-0.5 text-[9px] font-semibold rounded uppercase ${typeColors[d.type] ?? "bg-surface-600 text-text-muted"}`}>
-                {d.type === "cancellation" ? "CNX" : d.type === "delay" ? "DLY" : "DIV"}
-              </span>
-              <span className="font-semibold">{d.flightNumber}</span>
-              <span className="text-text-muted">{d.origin}→{d.destination}</span>
-            </button>
-          ))}
-        </div>
-      )}
+      {/* Flight search */}
+      <FlightSearch
+        disruptions={disruptions}
+        currentId={disruption.id}
+        onSelect={onSelectDisruption}
+      />
 
       {/* Disruption detail */}
       <div className="bg-surface-800 border border-surface-600 rounded-lg">
@@ -69,7 +58,7 @@ export function OverviewPanel({ disruption, passengers, pendingWishes, disruptio
         >
           ▶
         </span>
-        <span className={`inline-block px-2 py-0.5 text-[10px] font-mono font-semibold rounded uppercase ${typeColors[disruption.type] ?? "bg-surface-600 text-text-muted"}`}>
+        <span className={`inline-block px-2 py-0.5 text-[10px] font-mono font-semibold rounded uppercase ${TYPE_COLORS[disruption.type] ?? "bg-surface-600 text-text-muted"}`}>
           {disruption.type}
         </span>
         <span className="font-mono text-sm font-semibold text-text-primary">
@@ -133,6 +122,124 @@ export function OverviewPanel({ disruption, passengers, pendingWishes, disruptio
         </div>
       )}
       </div>
+    </div>
+  );
+}
+
+function FlightSearch({
+  disruptions,
+  currentId,
+  onSelect,
+}: {
+  disruptions: Disruption[];
+  currentId: string;
+  onSelect: (id: string) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  const filtered = useMemo(() => {
+    if (!query.trim()) return disruptions;
+    const q = query.toLowerCase();
+    return disruptions.filter(
+      (d) =>
+        d.flightNumber.toLowerCase().includes(q) ||
+        d.origin.toLowerCase().includes(q) ||
+        d.destination.toLowerCase().includes(q) ||
+        d.type.toLowerCase().includes(q) ||
+        d.reason.toLowerCase().includes(q)
+    );
+  }, [disruptions, query]);
+
+  const current = disruptions.find((d) => d.id === currentId);
+
+  return (
+    <div ref={ref} className="relative w-80">
+      <div
+        className={`flex items-center bg-surface-800 border rounded-md transition-colors ${
+          open ? "border-accent-blue/50" : "border-surface-600"
+        }`}
+      >
+        {/* Search icon */}
+        <span className="pl-3 text-text-muted text-xs">✈</span>
+        <input
+          ref={inputRef}
+          type="text"
+          value={open ? query : ""}
+          placeholder={
+            open
+              ? "Search by flight, route, type..."
+              : current
+                ? `${current.flightNumber}  ${current.origin} → ${current.destination}`
+                : "Select flight..."
+          }
+          onFocus={() => {
+            setOpen(true);
+            setQuery("");
+          }}
+          onChange={(e) => setQuery(e.target.value)}
+          className="flex-1 bg-transparent px-2 py-1.5 text-xs font-mono text-text-primary placeholder:text-text-muted outline-none"
+        />
+        {open ? (
+          <button
+            onClick={() => { setOpen(false); setQuery(""); }}
+            className="pr-3 text-text-muted hover:text-text-secondary text-xs cursor-pointer"
+          >
+            ✕
+          </button>
+        ) : (
+          <span className="pr-3 text-text-muted text-[10px]">▼</span>
+        )}
+      </div>
+
+      {/* Dropdown */}
+      {open && (
+        <div className="absolute z-50 mt-1 w-full max-h-64 overflow-auto bg-surface-800 border border-surface-600 rounded-md shadow-xl">
+          {filtered.length === 0 ? (
+            <div className="px-3 py-4 text-xs text-text-muted text-center font-mono">
+              No flights matching "{query}"
+            </div>
+          ) : (
+            filtered.map((d) => (
+              <button
+                key={d.id}
+                onClick={() => {
+                  onSelect(d.id);
+                  setOpen(false);
+                  setQuery("");
+                  inputRef.current?.blur();
+                }}
+                className={`w-full flex items-center gap-2 px-3 py-2 text-xs font-mono transition-colors cursor-pointer ${
+                  d.id === currentId
+                    ? "bg-surface-700 text-text-primary"
+                    : "text-text-secondary hover:bg-surface-700/50 hover:text-text-primary"
+                }`}
+              >
+                <span className={`inline-block px-1.5 py-0.5 text-[9px] font-semibold rounded uppercase shrink-0 ${TYPE_COLORS[d.type] ?? "bg-surface-600 text-text-muted"}`}>
+                  {TYPE_LABELS[d.type] ?? d.type}
+                </span>
+                <span className="font-semibold shrink-0">{d.flightNumber}</span>
+                <span className="text-text-muted shrink-0">{d.origin} → {d.destination}</span>
+                <span className="flex-1" />
+                <span className="text-text-muted truncate max-w-[140px] text-[10px]">{d.reason}</span>
+              </button>
+            ))
+          )}
+        </div>
+      )}
     </div>
   );
 }

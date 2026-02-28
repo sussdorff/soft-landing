@@ -186,14 +186,13 @@ export function FlightOverview({
             <span className="text-text-muted">|</span>
             <button
               onClick={expandAll}
-              className="text-[10px] font-mono text-text-muted hover:text-text-secondary transition-colors cursor-pointer"
+              className="px-3 py-1.5 text-xs font-mono font-semibold text-text-secondary bg-surface-700 hover:bg-surface-600 rounded-md transition-colors cursor-pointer"
             >
               Expand all
             </button>
-            <span className="text-text-muted">|</span>
             <button
               onClick={collapseAll}
-              className="text-[10px] font-mono text-text-muted hover:text-text-secondary transition-colors cursor-pointer"
+              className="px-3 py-1.5 text-xs font-mono font-semibold text-text-secondary bg-surface-700 hover:bg-surface-600 rounded-md transition-colors cursor-pointer"
             >
               Collapse all
             </button>
@@ -519,16 +518,16 @@ function PassengerRow({
                           );
                         }}
                         disabled={resolvingId !== null}
-                        className={`shrink-0 px-3 py-1.5 text-xs font-mono font-semibold rounded transition-colors cursor-pointer ${
+                        className={`shrink-0 px-5 py-2.5 text-sm font-mono font-bold rounded-md transition-all cursor-pointer ${
                           resolvingId === opt.id
-                            ? "bg-accent-green/30 text-accent-green"
-                            : "bg-accent-green/15 text-accent-green hover:bg-accent-green/25"
+                            ? "bg-accent-green text-surface-900 scale-95"
+                            : "bg-accent-green text-surface-900 hover:brightness-110 hover:shadow-[0_0_12px_rgba(34,197,94,0.4)] active:scale-95"
                         } disabled:opacity-50 disabled:cursor-not-allowed`}
                       >
-                        {resolvingId === opt.id ? "..." : "Resolve"}
+                        {resolvingId === opt.id ? "..." : "RESOLVE"}
                       </button>
                     ) : (
-                      <span className="shrink-0 w-[72px]" />
+                      <span className="shrink-0 w-[100px]" />
                     )}
                     <OptionTypeIcon type={opt.type} />
                     <div className="flex-1 min-w-0">

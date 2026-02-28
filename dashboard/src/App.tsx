@@ -159,15 +159,15 @@ function TabButton({
   return (
     <button
       onClick={onClick}
-      className={`px-4 py-2 text-sm font-medium rounded-t-md transition-colors cursor-pointer ${
+      className={`px-6 py-3 text-base font-bold rounded-t-lg transition-all cursor-pointer ${
         active
-          ? "bg-surface-800 text-text-primary border border-surface-600 border-b-surface-800"
-          : "text-text-muted hover:text-text-secondary"
+          ? "bg-surface-800 text-text-primary border-2 border-surface-500 border-b-surface-800"
+          : "text-text-muted hover:text-text-secondary hover:bg-surface-800/50 border-2 border-transparent"
       }`}
     >
       {children}
       {count !== undefined && count > 0 && (
-        <span className="ml-2 px-1.5 py-0.5 text-[10px] font-mono font-bold rounded-full bg-accent-blue/20 text-accent-blue tabular-nums">
+        <span className="ml-2 px-2 py-1 text-xs font-mono font-bold rounded-full bg-accent-blue text-surface-900 tabular-nums animate-pulse">
           {count}
         </span>
       )}
