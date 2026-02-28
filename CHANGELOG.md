@@ -9,11 +9,26 @@ and this project uses [CalVer](https://calver.org/) versioning (YYYY.0M.MICRO).
 
 ### Added
 
+- **dashboard**: Add flight selector and multi-disruption mock data
+- **backend**: Add disruption engine, move API docs to /api/docs
+
+## [2026.02.2] - 2026-02-28
+
+### Added
+
+- **dashboard**: Add search filter and move resolve buttons to front
+- **dashboard**: Make overview panel and flight summary collapsible
 - **backend**: Switch to Postgres with async SQLAlchemy and realistic seed data
+
+### Documentation
+
+- Add problem/solution overview slides to deck
+- Update changelog
 
 ### Maintenance
 
 - Add auto-deploy GitHub Action for Hetzner
+- Bump version to 2026.02.2
 
 ## [2026.02.1] - 2026-02-28
 
